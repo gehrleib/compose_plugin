@@ -181,8 +181,19 @@ var editorModal = {
   currentTab: null,
   originalContent: {},
   modifiedTabs: new Set(),
-  currentProject: null
+  currentProject: null,
+  validationTimeout: null
 };
+
+// Debounce helper for validation
+function debounceValidation(type, content) {
+  if (editorModal.validationTimeout) {
+    clearTimeout(editorModal.validationTimeout);
+  }
+  editorModal.validationTimeout = setTimeout(function() {
+    validateYaml(type, content);
+  }, 300);
+}
 
 // Calculate unRAID header offset dynamically
 function updateModalOffset() {
@@ -250,7 +261,7 @@ function initEditorModal() {
       }
       
       updateSaveButtonState();
-      validateYaml(type, currentContent);
+      debounceValidation(type, currentContent);
     });
     
     editorModal.editors[type] = editor;
