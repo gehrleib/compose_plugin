@@ -760,6 +760,13 @@ function doCloseEditorModal() {
   $('#editor-modal-overlay').removeClass('active');
   editorModal.currentProject = null;
   editorModal.modifiedTabs = new Set();
+  editorModal.originalContent = {};
+  // Clear editor content to avoid showing stale content on next open
+  ['compose', 'env', 'override'].forEach(function(type) {
+    if (editorModal.editors[type]) {
+      editorModal.editors[type].setValue('', -1);
+    }
+  });
 }
 
 function build_override_input_table( id, value, label, placeholder, disable=false) {
