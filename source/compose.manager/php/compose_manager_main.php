@@ -233,7 +233,7 @@ function initEditorModal() {
     editor.setTheme(aceTheme);
     editor.setShowPrintMargin(false);
     editor.setOptions({
-      fontSize: '14px',
+      fontSize: '0.875rem',
       tabSize: 2,
       useSoftTabs: true,
       wrap: true
@@ -279,6 +279,48 @@ function initEditorModal() {
       if (e.key === 'Escape') {
         e.preventDefault();
         closeEditorModal();
+      }
+      // Arrow key navigation for tabs
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        var $activeTab = $('.editor-tab.active');
+        if ($activeTab.is(':focus') || $activeTab.parent().find(':focus').length) {
+          e.preventDefault();
+          var tabs = ['compose', 'env', 'override'];
+          var currentIdx = tabs.indexOf(editorModal.currentTab);
+          var newIdx;
+          if (e.key === 'ArrowLeft') {
+            newIdx = currentIdx > 0 ? currentIdx - 1 : tabs.length - 1;
+          } else {
+            newIdx = currentIdx < tabs.length - 1 ? currentIdx + 1 : 0;
+          }
+          switchEditorTab(tabs[newIdx]);
+          $('#editor-tab-' + tabs[newIdx]).focus();
+        }
+      }
+      // Focus trapping
+      if (e.key === 'Tab') {
+        var $modal = $('#editor-modal-overlay');
+        var $focusable = $modal.find('a, button, input, textarea, select, [tabindex]:not([tabindex="-1"])').filter(':visible:not(:disabled)');
+        if ($focusable.length === 0) return;
+        var first = $focusable[0];
+        var last = $focusable[$focusable.length - 1];
+        var activeElement = document.activeElement;
+        
+        // If focus is outside the modal, move it to the first focusable element
+        if (!$.contains($modal[0], activeElement)) {
+          e.preventDefault();
+          first.focus();
+          return;
+        }
+        
+        // Handle Tab and Shift+Tab to keep focus within the modal
+        if (!e.shiftKey && activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        } else if (e.shiftKey && activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
       }
     }
   });
@@ -544,7 +586,9 @@ function loadEditorFiles(project) {
         editorModal.editors['compose'].setValue(response.content || '', -1);
       }
     }).fail(function() {
-      editorModal.editors['compose'].setValue('# Error loading file', -1);
+      var errorContent = '# Error loading file';
+      editorModal.originalContent['compose'] = errorContent;
+      editorModal.editors['compose'].setValue(errorContent, -1);
     })
   );
   
@@ -557,7 +601,9 @@ function loadEditorFiles(project) {
         editorModal.editors['env'].setValue(response.content || '', -1);
       }
     }).fail(function() {
-      editorModal.editors['env'].setValue('# Error loading file', -1);
+      var errorContent = '# Error loading file';
+      editorModal.originalContent['env'] = errorContent;
+      editorModal.editors['env'].setValue(errorContent, -1);
     })
   );
   
@@ -570,7 +616,9 @@ function loadEditorFiles(project) {
         editorModal.editors['override'].setValue(response.content || '', -1);
       }
     }).fail(function() {
-      editorModal.editors['override'].setValue('# Error loading file', -1);
+      var errorContent = '# Error loading file';
+      editorModal.originalContent['override'] = errorContent;
+      editorModal.editors['override'].setValue(errorContent, -1);
     })
   );
   
@@ -584,6 +632,13 @@ function loadEditorFiles(project) {
 }
 
 function switchEditorTab(tabName) {
+  // Validate tab name
+  var validTabs = ['compose', 'env', 'override'];
+  if (validTabs.indexOf(tabName) === -1) {
+    console.error('Invalid tab name: ' + tabName);
+    return;
+  }
+  
   // Update tab buttons and ARIA states
   $('.editor-tab').removeClass('active').attr('aria-selected', 'false');
   $('#editor-tab-' + tabName).addClass('active').attr('aria-selected', 'true');
@@ -672,6 +727,8 @@ function saveCurrentTab() {
     setTimeout(function() {
       validateYaml(currentTab, editorModal.editors[currentTab].getValue());
     }, 1500);
+  }).catch(function() {
+    // Error already handled in saveTab's .fail() handler
   });
 }
 
@@ -723,17 +780,40 @@ function saveTab(tabName) {
 function saveAllTabs() {
   var savePromises = [];
   
+  if (editorModal.modifiedTabs.size === 0) {
+    return;
+  }
+  
   editorModal.modifiedTabs.forEach(function(tabName) {
     savePromises.push(saveTab(tabName));
   });
   
   $.when.apply($, savePromises).then(function() {
+    var results = Array.prototype.slice.call(arguments);
+    var allSucceeded = results.every(function(result) {
+      return result === true;
+    });
+    
+    if (allSucceeded) {
+      swal2({
+        title: "Saved!",
+        text: "All changes have been saved.",
+        icon: "success",
+        timer: 1500,
+        buttons: false
+      });
+    } else {
+      swal2({
+        title: "Partial Save",
+        text: "Some files could not be saved. Please check the error messages and try again.",
+        icon: "warning"
+      });
+    }
+  }).fail(function() {
     swal2({
-      title: "Saved!",
-      text: "All changes have been saved.",
-      icon: "success",
-      timer: 1500,
-      buttons: false
+      title: "Save Failed",
+      text: "An error occurred while saving. Please try again.",
+      icon: "error"
     });
   });
 }
@@ -1073,19 +1153,19 @@ function ComposeLogs(myID) {
     <!-- Tab Bar -->
     <div class="editor-tabs" role="tablist">
       <button class="editor-tab active" id="editor-tab-compose" onclick="switchEditorTab('compose')" role="tab" aria-selected="true" aria-controls="editor-container-compose">
-        <i class="fa fa-file-code-o"></i>
+        <i class="fa fa-file-code-o" aria-hidden="true"></i>
         docker-compose.yml
-        <span class="editor-tab-modified"></span>
+        <span class="editor-tab-modified" aria-hidden="true"></span>
       </button>
       <button class="editor-tab" id="editor-tab-env" onclick="switchEditorTab('env')" role="tab" aria-selected="false" aria-controls="editor-container-env">
-        <i class="fa fa-cog"></i>
+        <i class="fa fa-cog" aria-hidden="true"></i>
         .env
-        <span class="editor-tab-modified"></span>
+        <span class="editor-tab-modified" aria-hidden="true"></span>
       </button>
       <button class="editor-tab" id="editor-tab-override" onclick="switchEditorTab('override')" role="tab" aria-selected="false" aria-controls="editor-container-override">
-        <i class="fa fa-files-o"></i>
+        <i class="fa fa-files-o" aria-hidden="true"></i>
         docker-compose.override.yml
-        <span class="editor-tab-modified"></span>
+        <span class="editor-tab-modified" aria-hidden="true"></span>
       </button>
     </div>
     
