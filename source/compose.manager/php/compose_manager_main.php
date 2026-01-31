@@ -576,10 +576,8 @@ function loadEditorFiles(project) {
   
   // When all files are loaded
   $.when.apply($, loadPromises).then(function() {
-    // Activate the compose tab by default
+    // Activate the compose tab by default (also runs validation)
     switchEditorTab('compose');
-    // Run validation on the initial content
-    validateYaml('compose', editorModal.editors['compose'].getValue());
   }).fail(function() {
     $('#editor-validation').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Error loading some files').removeClass('valid').addClass('error');
   });
