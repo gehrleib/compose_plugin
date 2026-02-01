@@ -340,11 +340,18 @@ function dirname( path ) {
 // Editor modal state
 var editorModal = {
   editors: {},
-  currentTab: null,
+  currentTab: 'compose',
   originalContent: {},
   modifiedTabs: new Set(),
   currentProject: null,
-  validationTimeout: null
+  validationTimeout: null,
+  // Settings state
+  originalSettings: {},
+  modifiedSettings: new Set(),
+  // Labels state
+  originalLabels: {},
+  modifiedLabels: new Set(),
+  labelsData: null  // Stores the parsed compose and override data
 };
 
 // Debounce helper for validation
@@ -387,8 +394,8 @@ function updateModalOffset() {
 
 // Initialize editor modal
 function initEditorModal() {
-  // Initialize Ace editors for each tab
-  ['compose', 'env', 'override'].forEach(function(type) {
+  // Initialize Ace editors for compose and env tabs only
+  ['compose', 'env'].forEach(function(type) {
     var editor = ace.edit('editor-' + type);
     editor.setTheme(aceTheme);
     editor.setShowPrintMargin(false);
@@ -421,10 +428,38 @@ function initEditorModal() {
       }
       
       updateSaveButtonState();
+      updateTabModifiedState();
       debounceValidation(type, currentContent);
     });
     
     editorModal.editors[type] = editor;
+  });
+  
+  // Initialize settings field change tracking
+  $('#settings-name, #settings-description, #settings-icon-url, #settings-env-path').on('input', function() {
+    var fieldId = this.id.replace('settings-', '');
+    var currentValue = $(this).val();
+    var originalValue = editorModal.originalSettings[fieldId] || '';
+    
+    if (currentValue !== originalValue) {
+      editorModal.modifiedSettings.add(fieldId);
+    } else {
+      editorModal.modifiedSettings.delete(fieldId);
+    }
+    
+    updateSaveButtonState();
+    updateTabModifiedState();
+  });
+  
+  // Icon preview update
+  $('#settings-icon-url').on('input', function() {
+    var url = $(this).val().trim();
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      $('#settings-icon-preview-img').attr('src', url);
+      $('#settings-icon-preview').show();
+    } else {
+      $('#settings-icon-preview').hide();
+    }
   });
   
   // Keyboard shortcuts - use namespaced event to avoid duplicates
@@ -445,7 +480,7 @@ function initEditorModal() {
         var $activeTab = $('.editor-tab.active');
         if ($activeTab.is(':focus') || $activeTab.parent().find(':focus').length) {
           e.preventDefault();
-          var tabs = ['compose', 'env', 'override'];
+          var tabs = ['compose', 'env', 'labels', 'settings'];
           var currentIdx = tabs.indexOf(editorModal.currentTab);
           var newIdx;
           if (e.key === 'ArrowLeft') {
@@ -453,7 +488,7 @@ function initEditorModal() {
           } else {
             newIdx = currentIdx < tabs.length - 1 ? currentIdx + 1 : 0;
           }
-          switchEditorTab(tabs[newIdx]);
+          switchTab(tabs[newIdx]);
           $('#editor-tab-' + tabs[newIdx]).focus();
         }
       }
@@ -482,6 +517,67 @@ function initEditorModal() {
       }
     }
   });
+}
+
+// Switch between tabs (compose / env / labels / settings)
+function switchTab(tabName) {
+  var validTabs = ['compose', 'env', 'labels', 'settings'];
+  if (validTabs.indexOf(tabName) === -1) {
+    console.error('Invalid tab name: ' + tabName);
+    return;
+  }
+  
+  // Update tab buttons
+  $('.editor-tab').removeClass('active').attr('aria-selected', 'false');
+  $('#editor-tab-' + tabName).addClass('active').attr('aria-selected', 'true');
+  
+  // Update panels
+  $('.editor-panel').removeClass('active');
+  $('#editor-panel-' + tabName).addClass('active');
+  
+  editorModal.currentTab = tabName;
+  
+  // Resize and focus editor if switching to compose or env tab
+  if ((tabName === 'compose' || tabName === 'env') && editorModal.editors[tabName]) {
+    editorModal.editors[tabName].resize();
+    editorModal.editors[tabName].focus();
+  }
+  
+  // Load labels data if switching to labels tab for the first time
+  if (tabName === 'labels' && !editorModal.labelsData) {
+    loadLabelsData();
+  }
+}
+
+// Update the modified indicator on tabs
+function updateTabModifiedState() {
+  // Compose tab
+  if (editorModal.modifiedTabs.has('compose')) {
+    $('#editor-tab-compose').addClass('modified');
+  } else {
+    $('#editor-tab-compose').removeClass('modified');
+  }
+  
+  // Env tab
+  if (editorModal.modifiedTabs.has('env')) {
+    $('#editor-tab-env').addClass('modified');
+  } else {
+    $('#editor-tab-env').removeClass('modified');
+  }
+  
+  // Labels tab
+  if (editorModal.modifiedLabels.size > 0) {
+    $('#editor-tab-labels').addClass('modified');
+  } else {
+    $('#editor-tab-labels').removeClass('modified');
+  }
+  
+  // Settings tab
+  if (editorModal.modifiedSettings.size > 0) {
+    $('#editor-tab-settings').addClass('modified');
+  } else {
+    $('#editor-tab-settings').removeClass('modified');
+  }
 }
 
 // HTML escape function to prevent XSS
@@ -1597,7 +1693,8 @@ function executeStackAction(action) {
       showEditDescDialog(currentStackId, project);
       break;
     case 'uiLabels':
-      generateOverride(null, project);
+      // Open modal on Labels tab
+      openEditorModalByProject(project, projectName, 'labels');
       break;
     case 'settings':
       editStackSettingsByProject(project);
@@ -1646,14 +1743,21 @@ function showProfileSelector(action, path, profiles) {
   });
 }
 
-function openEditorModalByProject(project, projectName) {
+function openEditorModalByProject(project, projectName, initialTab) {
   editorModal.currentProject = project;
   editorModal.modifiedTabs = new Set();
+  editorModal.modifiedSettings = new Set();
+  editorModal.modifiedLabels = new Set();
   editorModal.originalContent = {};
+  editorModal.originalSettings = {};
+  editorModal.originalLabels = {};
+  editorModal.labelsData = null;
   
   // Reset all tabs to unmodified state
   $('.editor-tab').removeClass('modified active');
+  $('.editor-main-tab').removeClass('modified active');
   $('.editor-container').removeClass('active');
+  $('.editor-panel').removeClass('active');
   
   // Set modal title
   $('#editor-modal-title').text('Editing: ' + projectName);
@@ -1661,10 +1765,15 @@ function openEditorModalByProject(project, projectName) {
   
   // Show loading state
   $('#editor-modal-overlay').addClass('active');
-  $('#editor-validation').html('<i class="fa fa-spinner fa-spin editor-validation-icon"></i> Loading files...').removeClass('valid error warning');
+  $('#editor-validation-compose').html('<i class="fa fa-spinner fa-spin editor-validation-icon"></i> Loading files...').removeClass('valid error warning');
   
-  // Load all files
+  // Load all files and settings
   loadEditorFiles(project);
+  loadSettingsData(project, projectName);
+  
+  // Switch to appropriate initial tab (default to 'compose')
+  var targetTab = initialTab || 'compose';
+  switchTab(targetTab);
 }
 
 function loadEditorFiles(project) {
@@ -1700,54 +1809,235 @@ function loadEditorFiles(project) {
     })
   );
   
-  // Load override file
-  loadPromises.push(
-    $.post(caURL, {action:'getOverride', script:project}).then(function(data) {
-      if (data) {
-        var response = jQuery.parseJSON(data);
-        editorModal.originalContent['override'] = response.content || '';
-        editorModal.editors['override'].setValue(response.content || '', -1);
-      }
-    }).fail(function() {
-      var errorContent = '# Error loading file';
-      editorModal.originalContent['override'] = errorContent;
-      editorModal.editors['override'].setValue(errorContent, -1);
-    })
-  );
-  
   // When all files are loaded
   $.when.apply($, loadPromises).then(function() {
-    // Activate the compose tab by default (also runs validation)
-    switchEditorTab('compose');
+    // Run validation on compose file
+    validateYaml('compose', editorModal.editors['compose'].getValue());
   }).fail(function() {
-    $('#editor-validation').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Error loading some files').removeClass('valid').addClass('error');
+    $('#editor-validation-compose').html('<i class="fa fa-exclamation-triangle editor-validation-icon"></i> Error loading some files').removeClass('valid').addClass('error');
   });
 }
 
-function switchEditorTab(tabName) {
-  // Validate tab name
-  var validTabs = ['compose', 'env', 'override'];
-  if (validTabs.indexOf(tabName) === -1) {
-    console.error('Invalid tab name: ' + tabName);
-    return;
+// Load settings data into the settings panel
+function loadSettingsData(project, projectName) {
+  // Set the name from projectName (display name)
+  $('#settings-name').val(projectName || '');
+  editorModal.originalSettings['name'] = projectName || '';
+  
+  // Load description
+  $.post(caURL, {action:'getDescription', script:project}).then(function(data) {
+    if (data) {
+      var response = JSON.parse(data);
+      var desc = (response.content || '').replace(/<br>/g, '\n');
+      $('#settings-description').val(desc);
+      editorModal.originalSettings['description'] = desc;
+    }
+  }).fail(function() {
+    $('#settings-description').val('');
+    editorModal.originalSettings['description'] = '';
+  });
+  
+  // Load stack settings (icon URL and env path)
+  $.post(caURL, {action:'getStackSettings', script:project}).then(function(data) {
+    if (data) {
+      var response = JSON.parse(data);
+      if (response.result === 'success') {
+        // Icon URL
+        var iconUrl = response.iconUrl || '';
+        $('#settings-icon-url').val(iconUrl);
+        editorModal.originalSettings['icon-url'] = iconUrl;
+        if (iconUrl && (iconUrl.startsWith('http://') || iconUrl.startsWith('https://'))) {
+          $('#settings-icon-preview-img').attr('src', iconUrl);
+          $('#settings-icon-preview').show();
+        } else {
+          $('#settings-icon-preview').hide();
+        }
+        
+        // ENV path
+        var envPath = response.envPath || '';
+        $('#settings-env-path').val(envPath);
+        editorModal.originalSettings['env-path'] = envPath;
+      }
+    }
+  }).fail(function() {
+    $('#settings-icon-url').val('');
+    $('#settings-env-path').val('');
+    editorModal.originalSettings['icon-url'] = '';
+    editorModal.originalSettings['env-path'] = '';
+    $('#settings-icon-preview').hide();
+  });
+}
+
+// Load labels data for the WebUI Labels panel
+function loadLabelsData() {
+  var project = editorModal.currentProject;
+  if (!project) return;
+  
+  $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-spinner fa-spin"></i> Loading services...</div>');
+  
+  // Load both compose file and override file to build the labels UI
+  var composePromise = $.post(caURL, {action:'getYml', script:project});
+  var overridePromise = $.post(caURL, {action:'getOverride', script:project});
+  
+  $.when(composePromise, overridePromise).then(function(composeResult, overrideResult) {
+    try {
+      var composeData = JSON.parse(composeResult[0]);
+      var overrideData = JSON.parse(overrideResult[0]);
+      
+      if (composeData.result !== 'success') {
+        throw new Error('Failed to load compose file');
+      }
+      
+      var mainDoc = jsyaml.load(composeData.content) || {services: {}};
+      var overrideDoc = jsyaml.load(overrideData.content || '') || {services: {}};
+      
+      // Ensure override has services object
+      if (!overrideDoc.services) {
+        overrideDoc.services = {};
+      }
+      
+      editorModal.labelsData = {
+        mainDoc: mainDoc,
+        overrideDoc: overrideDoc
+      };
+      
+      renderLabelsUI(mainDoc, overrideDoc);
+      
+    } catch (e) {
+      console.error('Failed to parse compose files for labels:', e);
+      $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Error loading services: ' + escapeHtml(e.message) + '</div>');
+    }
+  }).fail(function() {
+    $('#labels-services-container').html('<div class="labels-empty-state"><i class="fa fa-exclamation-triangle"></i> Failed to load compose files</div>');
+  });
+}
+
+// Render the WebUI Labels UI
+function renderLabelsUI(mainDoc, overrideDoc) {
+  var html = '';
+  var deletedHtml = '';
+  var hasServices = false;
+  var hasDeletedServices = false;
+  
+  // Process services from main compose file
+  for (var serviceKey in mainDoc.services) {
+    hasServices = true;
+    var service = mainDoc.services[serviceKey];
+    var overrideService = overrideDoc.services[serviceKey] || {labels: {}};
+    
+    // Ensure override service has proper structure
+    if (!overrideService.labels) {
+      overrideDoc.services[serviceKey] = overrideDoc.services[serviceKey] || {};
+      overrideDoc.services[serviceKey].labels = overrideDoc.services[serviceKey].labels || {};
+      overrideDoc.services[serviceKey].labels[<?php echo json_encode($docker_label_managed); ?>] = <?php echo json_encode($docker_label_managed_name); ?>;
+      overrideService = overrideDoc.services[serviceKey];
+    }
+    
+    var containerName = service.container_name || serviceKey;
+    var iconValue = findLabelValue(overrideService, service, icon_label);
+    var webuiValue = findLabelValue(overrideService, service, webui_label);
+    var shellValue = findLabelValue(overrideService, service, shell_label);
+    
+    // Store original values
+    editorModal.originalLabels[serviceKey + '_icon'] = iconValue;
+    editorModal.originalLabels[serviceKey + '_webui'] = webuiValue;
+    editorModal.originalLabels[serviceKey + '_shell'] = shellValue;
+    
+    html += '<div class="labels-service" data-service="' + escapeAttr(serviceKey) + '">';
+    html += '<div class="labels-service-header">';
+    html += '<img class="labels-service-icon" src="/plugins/dynamix.docker.manager/images/question.png" alt="">';
+    html += '<span class="labels-service-name">' + escapeHtml(containerName) + '</span>';
+    html += '</div>';
+    html += '<div class="labels-service-fields">';
+    html += '<div class="labels-field">';
+    html += '<label><i class="fa fa-picture-o"></i> Icon URL</label>';
+    html += '<input type="text" id="label-' + escapeAttr(serviceKey) + '-icon" value="' + escapeAttr(iconValue) + '" placeholder="https://example.com/icon.png" data-service="' + escapeAttr(serviceKey) + '" data-field="icon">';
+    html += '</div>';
+    html += '<div class="labels-field">';
+    html += '<label><i class="fa fa-globe"></i> WebUI URL</label>';
+    html += '<input type="text" id="label-' + escapeAttr(serviceKey) + '-webui" value="' + escapeAttr(webuiValue) + '" placeholder="http://[IP]:[PORT:8080]/" data-service="' + escapeAttr(serviceKey) + '" data-field="webui">';
+    html += '</div>';
+    html += '<div class="labels-field">';
+    html += '<label><i class="fa fa-terminal"></i> Shell</label>';
+    html += '<input type="text" id="label-' + escapeAttr(serviceKey) + '-shell" value="' + escapeAttr(shellValue) + '" placeholder="/bin/bash" data-service="' + escapeAttr(serviceKey) + '" data-field="shell">';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
   }
   
-  // Update tab buttons and ARIA states
-  $('.editor-tab').removeClass('active').attr('aria-selected', 'false');
-  $('#editor-tab-' + tabName).addClass('active').attr('aria-selected', 'true');
+  // Check for deleted services in override that aren't in main
+  for (var serviceKey in overrideDoc.services) {
+    if (!(serviceKey in mainDoc.services)) {
+      hasDeletedServices = true;
+      var overrideService = overrideDoc.services[serviceKey];
+      var containerName = (overrideService && overrideService.container_name) || serviceKey;
+      var iconValue = findLabelValue(overrideService, {}, icon_label);
+      var webuiValue = findLabelValue(overrideService, {}, webui_label);
+      var shellValue = findLabelValue(overrideService, {}, shell_label);
+      
+      deletedHtml += '<div class="labels-service deleted" data-service="' + escapeAttr(serviceKey) + '" data-deleted="true">';
+      deletedHtml += '<div class="labels-service-header">';
+      deletedHtml += '<img class="labels-service-icon" src="/plugins/dynamix.docker.manager/images/question.png" alt="">';
+      deletedHtml += '<span class="labels-service-name">' + escapeHtml(containerName) + ' <span style="color:#f44336;font-size:0.8em;">(will be removed)</span></span>';
+      deletedHtml += '</div>';
+      deletedHtml += '<div class="labels-service-fields">';
+      deletedHtml += '<div class="labels-field"><label><i class="fa fa-picture-o"></i> Icon</label><input type="text" value="' + escapeAttr(iconValue) + '" disabled></div>';
+      deletedHtml += '<div class="labels-field"><label><i class="fa fa-globe"></i> WebUI</label><input type="text" value="' + escapeAttr(webuiValue) + '" disabled></div>';
+      deletedHtml += '<div class="labels-field"><label><i class="fa fa-terminal"></i> Shell</label><input type="text" value="' + escapeAttr(shellValue) + '" disabled></div>';
+      deletedHtml += '</div>';
+      deletedHtml += '</div>';
+    }
+  }
   
-  // Update editor containers
-  $('.editor-container').removeClass('active');
-  $('#editor-container-' + tabName).addClass('active');
+  if (!hasServices) {
+    html = '<div class="labels-empty-state"><i class="fa fa-cubes"></i> No services defined in docker-compose.yml</div>';
+  }
   
-  // Focus and resize the editor
-  editorModal.editors[tabName].focus();
-  editorModal.editors[tabName].resize();
+  if (hasDeletedServices) {
+    html += '<div class="labels-deleted-section">';
+    html += '<div class="labels-deleted-title" onclick="toggleDeletedServices(this)"><i class="fa fa-chevron-right"></i> Orphaned Services (will be removed on save)</div>';
+    html += '<div class="labels-deleted-services">' + deletedHtml + '</div>';
+    html += '</div>';
+  }
   
-  editorModal.currentTab = tabName;
+  $('#labels-services-container').html(html);
   
-  // Update validation for current tab
-  validateYaml(tabName, editorModal.editors[tabName].getValue());
+  // Attach change handlers to label inputs
+  $('#labels-services-container').find('input[data-service]').on('input', function() {
+    var service = $(this).data('service');
+    var field = $(this).data('field');
+    var key = service + '_' + field;
+    var currentValue = $(this).val();
+    var originalValue = editorModal.originalLabels[key] || '';
+    
+    if (currentValue !== originalValue) {
+      editorModal.modifiedLabels.add(key);
+    } else {
+      editorModal.modifiedLabels.delete(key);
+    }
+    
+    updateSaveButtonState();
+    updateTabModifiedState();
+  });
+}
+
+// Helper to find label value from override or main service
+function findLabelValue(overrideService, mainService, labelKey) {
+  if (overrideService && overrideService.labels && overrideService.labels[labelKey]) {
+    return overrideService.labels[labelKey];
+  }
+  if (mainService && mainService.labels && mainService.labels[labelKey]) {
+    return mainService.labels[labelKey];
+  }
+  return '';
+}
+
+// Toggle deleted services visibility
+function toggleDeletedServices(el) {
+  var $title = $(el);
+  var $services = $title.next('.labels-deleted-services');
+  $title.toggleClass('expanded');
+  $services.toggleClass('visible');
 }
 
 function validateYaml(type, content) {
@@ -1768,7 +2058,7 @@ function validateYaml(type, content) {
 }
 
 function updateValidation(type, content, isValid, errorMsg) {
-  var validationEl = $('#editor-validation');
+  var validationEl = $('#editor-validation-' + type);
   
   // Handle env files separately (no YAML validation needed)
   if (type === 'env') {
@@ -1800,11 +2090,12 @@ function updateValidation(type, content, isValid, errorMsg) {
 }
 
 function updateSaveButtonState() {
-  var hasChanges = editorModal.modifiedTabs.size > 0;
+  var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
+  var hasChanges = totalChanges > 0;
   $('#editor-btn-save-all').prop('disabled', !hasChanges);
   
   if (hasChanges) {
-    $('#editor-btn-save-all').text('Save All (' + editorModal.modifiedTabs.size + ')');
+    $('#editor-btn-save-all').text('Save All (' + totalChanges + ')');
   } else {
     $('#editor-btn-save-all').text('Save All');
   }
@@ -1812,11 +2103,15 @@ function updateSaveButtonState() {
 
 function saveCurrentTab() {
   var currentTab = editorModal.currentTab;
-  if (!currentTab || !editorModal.modifiedTabs.has(currentTab)) return;
+  if (!currentTab) return;
+  
+  // Only save editor tabs
+  if (currentTab !== 'compose' && currentTab !== 'env') return;
+  if (!editorModal.modifiedTabs.has(currentTab)) return;
   
   saveTab(currentTab).then(function() {
     // Brief feedback in validation panel
-    $('#editor-validation').html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
+    $('#editor-validation-' + currentTab).html('<i class="fa fa-check editor-validation-icon"></i> Saved!').removeClass('error warning').addClass('valid');
     setTimeout(function() {
       validateYaml(currentTab, editorModal.editors[currentTab].getValue());
     }, 1500);
@@ -1837,9 +2132,6 @@ function saveTab(tabName) {
     case 'env':
       actionStr = 'saveEnv';
       break;
-    case 'override':
-      actionStr = 'saveOverride';
-      break;
     default:
       return Promise.reject('Unknown tab');
   }
@@ -1850,6 +2142,7 @@ function saveTab(tabName) {
       editorModal.modifiedTabs.delete(tabName);
       $('#editor-tab-' + tabName).removeClass('modified');
       updateSaveButtonState();
+      updateTabModifiedState();
       
       // Regenerate override and profiles if compose file was saved
       if (tabName === 'compose') {
@@ -1870,16 +2163,29 @@ function saveTab(tabName) {
   });
 }
 
-function saveAllTabs() {
+// Save all modified changes (files, settings, and labels)
+function saveAllChanges() {
   var savePromises = [];
+  var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
   
-  if (editorModal.modifiedTabs.size === 0) {
+  if (totalChanges === 0) {
     return;
   }
   
+  // Save modified file tabs
   editorModal.modifiedTabs.forEach(function(tabName) {
     savePromises.push(saveTab(tabName));
   });
+  
+  // Save settings if modified
+  if (editorModal.modifiedSettings.size > 0) {
+    savePromises.push(saveSettings());
+  }
+  
+  // Save labels if modified
+  if (editorModal.modifiedLabels.size > 0) {
+    savePromises.push(saveLabels());
+  }
   
   $.when.apply($, savePromises).then(function() {
     var results = Array.prototype.slice.call(arguments);
@@ -1898,7 +2204,7 @@ function saveAllTabs() {
     } else {
       swal2({
         title: "Partial Save",
-        text: "Some files could not be saved. Please check the error messages and try again.",
+        text: "Some items could not be saved. Please check the error messages and try again.",
         icon: "warning"
       });
     }
@@ -1911,8 +2217,153 @@ function saveAllTabs() {
   });
 }
 
+// Save settings
+function saveSettings() {
+  var project = editorModal.currentProject;
+  var savePromises = [];
+  var needsReload = false;
+  
+  // Save name if modified
+  if (editorModal.modifiedSettings.has('name')) {
+    var newName = $('#settings-name').val();
+    savePromises.push(
+      $.post(caURL, {action:'changeName', script:project, newName:newName}).then(function() {
+        editorModal.originalSettings['name'] = newName;
+        editorModal.modifiedSettings.delete('name');
+        needsReload = true;
+        return true;
+      }).fail(function() {
+        return false;
+      })
+    );
+  }
+  
+  // Save description if modified
+  if (editorModal.modifiedSettings.has('description')) {
+    var newDesc = $('#settings-description').val().replace(/\n/g, '<br>');
+    savePromises.push(
+      $.post(caURL, {action:'changeDesc', script:project, newDesc:newDesc}).then(function() {
+        editorModal.originalSettings['description'] = $('#settings-description').val();
+        editorModal.modifiedSettings.delete('description');
+        return true;
+      }).fail(function() {
+        return false;
+      })
+    );
+  }
+  
+  // Save icon URL and env path if either is modified
+  if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('env-path')) {
+    var iconUrl = $('#settings-icon-url').val();
+    var envPath = $('#settings-env-path').val();
+    savePromises.push(
+      $.post(caURL, {action:'setStackSettings', script:project, iconUrl:iconUrl, envPath:envPath}).then(function(data) {
+        if (data) {
+          var response = JSON.parse(data);
+          if (response.result === 'success') {
+            editorModal.originalSettings['icon-url'] = iconUrl;
+            editorModal.originalSettings['env-path'] = envPath;
+            editorModal.modifiedSettings.delete('icon-url');
+            editorModal.modifiedSettings.delete('env-path');
+            needsReload = true;
+            return true;
+          }
+        }
+        return false;
+      }).fail(function() {
+        return false;
+      })
+    );
+  }
+  
+  return $.when.apply($, savePromises).then(function() {
+    updateTabModifiedState();
+    updateSaveButtonState();
+    // Schedule a page reload after the swal closes if needed
+    if (needsReload) {
+      setTimeout(function() {
+        location.reload();
+      }, 1800);
+    }
+    return true;
+  });
+}
+
+// Save labels to override file
+function saveLabels() {
+  var project = editorModal.currentProject;
+  
+  if (!editorModal.labelsData) {
+    return $.Deferred().reject().promise();
+  }
+  
+  var mainDoc = editorModal.labelsData.mainDoc;
+  var overrideDoc = editorModal.labelsData.overrideDoc;
+  
+  // Update override doc with values from the form
+  for (var serviceKey in mainDoc.services) {
+    if (!(serviceKey in overrideDoc.services)) {
+      overrideDoc.services[serviceKey] = {
+        labels: {}
+      };
+      overrideDoc.services[serviceKey].labels[<?php echo json_encode($docker_label_managed); ?>] = <?php echo json_encode($docker_label_managed_name); ?>;
+    }
+    
+    var iconValue = $('#label-' + serviceKey + '-icon').val() || '';
+    var webuiValue = $('#label-' + serviceKey + '-webui').val() || '';
+    var shellValue = $('#label-' + serviceKey + '-shell').val() || '';
+    
+    if (!overrideDoc.services[serviceKey].labels) {
+      overrideDoc.services[serviceKey].labels = {};
+    }
+    
+    overrideDoc.services[serviceKey].labels[icon_label] = iconValue;
+    overrideDoc.services[serviceKey].labels[webui_label] = webuiValue;
+    overrideDoc.services[serviceKey].labels[shell_label] = shellValue;
+  }
+  
+  // Remove services from override that are no longer in main
+  for (var serviceKey in overrideDoc.services) {
+    if (!(serviceKey in mainDoc.services)) {
+      delete overrideDoc.services[serviceKey];
+    }
+  }
+  
+  // Convert to YAML and save
+  var rawOverride = jsyaml.dump(overrideDoc, {'forceQuotes': true});
+  
+  return $.post(caURL, {action:'saveOverride', script:project, scriptContents:rawOverride}).then(function(data) {
+    if (data) {
+      // Update original labels to match current values
+      for (var serviceKey in mainDoc.services) {
+        editorModal.originalLabels[serviceKey + '_icon'] = $('#label-' + serviceKey + '-icon').val() || '';
+        editorModal.originalLabels[serviceKey + '_webui'] = $('#label-' + serviceKey + '-webui').val() || '';
+        editorModal.originalLabels[serviceKey + '_shell'] = $('#label-' + serviceKey + '-shell').val() || '';
+      }
+      editorModal.modifiedLabels.clear();
+      updateTabModifiedState();
+      updateSaveButtonState();
+      return true;
+    }
+    return false;
+  }).fail(function() {
+    swal2({
+      title: "Save Failed",
+      text: "Failed to save WebUI labels. Please try again.",
+      icon: "error"
+    });
+    return false;
+  });
+}
+
+// Keep saveAllTabs for backwards compatibility
+function saveAllTabs() {
+  saveAllChanges();
+}
+
 function closeEditorModal() {
-  if (editorModal.modifiedTabs.size > 0) {
+  var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
+  if (totalChanges > 0) {
     swal2({
       title: "Unsaved Changes",
       text: "You have unsaved changes. Are you sure you want to close?",
@@ -1932,14 +2383,34 @@ function closeEditorModal() {
 function doCloseEditorModal() {
   $('#editor-modal-overlay').removeClass('active');
   editorModal.currentProject = null;
+  editorModal.currentTab = 'compose';
   editorModal.modifiedTabs = new Set();
+  editorModal.modifiedSettings = new Set();
+  editorModal.modifiedLabels = new Set();
   editorModal.originalContent = {};
+  editorModal.originalSettings = {};
+  editorModal.originalLabels = {};
+  editorModal.labelsData = null;
+  
   // Clear editor content to avoid showing stale content on next open
-  ['compose', 'env', 'override'].forEach(function(type) {
+  ['compose', 'env'].forEach(function(type) {
     if (editorModal.editors[type]) {
       editorModal.editors[type].setValue('', -1);
     }
   });
+  
+  // Reset settings fields
+  $('#settings-name').val('');
+  $('#settings-description').val('');
+  $('#settings-icon-url').val('');
+  $('#settings-env-path').val('');
+  $('#settings-icon-preview').hide();
+  
+  // Clear labels container
+  $('#labels-services-container').html('');
+  
+  // Reset tab states
+  $('.editor-tab').removeClass('modified');
 }
 
 function editComposeFileByProject(project) {
@@ -2038,50 +2509,12 @@ function showEditDescDialog(stackId, project) {
 }
 
 function editStackSettingsByProject(project) {
-  $.post(caURL,{action:'getStackSettings',script:project},function(rawSettings) {
-    if (rawSettings) {
-      var settings = JSON.parse(rawSettings);
-      if(settings.result == 'success') {
-        var form = document.createElement("div");
-        form.innerHTML =  `<div class="swal-text" style="font-weight: bold; padding-left: 0px; margin-top: 0px;">Icon URL</div>`;
-        form.innerHTML += `<input type='url' id='icon_url' class='swal-content__input' placeholder='https://example.com/icon.png' value='${escapeAttr(settings.iconUrl || '')}'>`;
-        form.innerHTML += `<div style="color:#888;font-size:0.85em;margin-top:4px;">Leave empty to use local icon file (icon.png in project folder)</div>`;
-        form.innerHTML += `<br>`;
-        form.innerHTML += `<div class="swal-text" style="font-weight: bold; padding-left: 0px; margin-top: 0px;">ENV File Path</div>`;
-        form.innerHTML += `<input type='text' id='env_path' class='swal-content__input' pattern="(\/mnt\/.*\/.+)" oninput="this.reportValidity()" title="A path under /mnt/user/ or /mnt/cache/ or /mnt/pool/" placeholder='Default' value='${escapeAttr(settings.envPath || '')}'>`;
-        swal2({
-          title: "Stack Settings",
-          content: form,
-          buttons: true,
-        }).then((inputValue) => {
-          if (inputValue) {
-            var new_env_path = document.getElementById("env_path").value;
-            var new_icon_url = document.getElementById("icon_url").value;
-            $.post(caURL,{action:'setStackSettings',envPath:new_env_path,iconUrl:new_icon_url,script:project},function(data) {
-                var title = "Failed to set stack settings.";
-                var message = "";
-                var icon = "error";
-                if (data) {
-                  var response = JSON.parse(data);
-                  if (response.result == "success") {
-                    title = "Success";
-                  }
-                  message = response.message;
-                  icon = response.result;
-                }
-                swal2({
-                  title: title,
-                  text: message,
-                  icon: icon,
-                }).then(() => {
-                  location.reload();
-                });
-            });        
-          }
-        });
-      }
-    }
-  });
+  // Find the project name from the row
+  var $row = $('[data-project="' + project + '"]').filter('tr.sortable');
+  var projectName = $row.data('projectname') || project;
+  
+  // Open modal on Settings tab
+  openEditorModalByProject(project, projectName, 'settings');
 }
 
 function deleteStackByProject(project, projectName) {
@@ -2532,7 +2965,8 @@ function addComposeStackContext(elementId) {
   // WebUI Labels
   opts.push({text: 'WebUI Labels', icon: 'fa-tag', action: function(e) {
     e.preventDefault();
-    generateOverride(null, project);
+    // Open modal on Labels tab
+    openEditorModalByProject(project, projectName, 'labels');
   }});
   
   opts.push({divider: true});
@@ -2742,46 +3176,115 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
       </button>
     </div>
     
-    <!-- Tab Bar -->
+    <!-- Unified Tab Bar -->
     <div class="editor-tabs" role="tablist">
-      <button class="editor-tab active" id="editor-tab-compose" onclick="switchEditorTab('compose')" role="tab" aria-selected="true" aria-controls="editor-container-compose">
+      <button class="editor-tab active" id="editor-tab-compose" onclick="switchTab('compose')" role="tab" aria-selected="true" aria-controls="editor-panel-compose">
         <i class="fa fa-file-code-o" aria-hidden="true"></i>
         docker-compose.yml
         <span class="editor-tab-modified" aria-hidden="true"></span>
       </button>
-      <button class="editor-tab" id="editor-tab-env" onclick="switchEditorTab('env')" role="tab" aria-selected="false" aria-controls="editor-container-env">
+      <button class="editor-tab" id="editor-tab-env" onclick="switchTab('env')" role="tab" aria-selected="false" aria-controls="editor-panel-env">
         <i class="fa fa-cog" aria-hidden="true"></i>
         .env
         <span class="editor-tab-modified" aria-hidden="true"></span>
       </button>
-      <button class="editor-tab" id="editor-tab-override" onclick="switchEditorTab('override')" role="tab" aria-selected="false" aria-controls="editor-container-override">
-        <i class="fa fa-files-o" aria-hidden="true"></i>
-        docker-compose.override.yml
+      <button class="editor-tab" id="editor-tab-labels" onclick="switchTab('labels')" role="tab" aria-selected="false" aria-controls="editor-panel-labels">
+        <i class="fa fa-tags" aria-hidden="true"></i>
+        WebUI Labels
+        <span class="editor-tab-modified" aria-hidden="true"></span>
+      </button>
+      <button class="editor-tab" id="editor-tab-settings" onclick="switchTab('settings')" role="tab" aria-selected="false" aria-controls="editor-panel-settings">
+        <i class="fa fa-sliders" aria-hidden="true"></i>
+        Settings
         <span class="editor-tab-modified" aria-hidden="true"></span>
       </button>
     </div>
     
-    <!-- Editor Body -->
-    <div class="editor-modal-body">
-      <!-- Compose Editor -->
-      <div class="editor-container active" id="editor-container-compose" role="tabpanel" aria-labelledby="editor-tab-compose">
-        <div id="editor-compose" style="width: 100%; height: 100%;"></div>
+    <!-- ========== COMPOSE EDITOR PANEL ========== -->
+    <div class="editor-panel active" id="editor-panel-compose" role="tabpanel" aria-labelledby="editor-tab-compose">
+      <div class="editor-modal-body">
+        <div class="editor-container active" id="editor-container-compose">
+          <div id="editor-compose" style="width: 100%; height: 100%;"></div>
+        </div>
       </div>
-      
-      <!-- ENV Editor -->
-      <div class="editor-container" id="editor-container-env" role="tabpanel" aria-labelledby="editor-tab-env">
-        <div id="editor-env" style="width: 100%; height: 100%;"></div>
-      </div>
-      
-      <!-- Override Editor -->
-      <div class="editor-container" id="editor-container-override" role="tabpanel" aria-labelledby="editor-tab-override">
-        <div id="editor-override" style="width: 100%; height: 100%;"></div>
+      <div class="editor-validation" id="editor-validation-compose">
+        <i class="fa fa-check editor-validation-icon"></i> Ready
       </div>
     </div>
     
-    <!-- Validation Panel -->
-    <div class="editor-validation" id="editor-validation">
-      <i class="fa fa-check editor-validation-icon"></i> Ready
+    <!-- ========== ENV EDITOR PANEL ========== -->
+    <div class="editor-panel" id="editor-panel-env" role="tabpanel" aria-labelledby="editor-tab-env">
+      <div class="editor-modal-body">
+        <div class="editor-container active" id="editor-container-env">
+          <div id="editor-env" style="width: 100%; height: 100%;"></div>
+        </div>
+      </div>
+      <div class="editor-validation" id="editor-validation-env">
+        <i class="fa fa-check editor-validation-icon"></i> Ready
+      </div>
+    </div>
+    
+    <!-- ========== WEBUI LABELS PANEL ========== -->
+    <div class="editor-panel" id="editor-panel-labels" role="tabpanel" aria-labelledby="editor-tab-labels">
+      <div class="labels-panel">
+        <div class="labels-panel-header">
+          <p>Configure icons, WebUI links, and shell commands for each service. These labels integrate your containers with the unRAID Docker UI.</p>
+        </div>
+        <div id="labels-services-container">
+          <div class="labels-empty-state">
+            <i class="fa fa-spinner fa-spin"></i>
+            Loading services...
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ========== SETTINGS PANEL ========== -->
+    <div class="editor-panel" id="editor-panel-settings" role="tabpanel" aria-labelledby="editor-tab-settings">
+      <div class="settings-panel">
+        <!-- Stack Identity -->
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="fa fa-info-circle"></i> Stack Identity</div>
+          
+          <div class="settings-field">
+            <label for="settings-name">Stack Name</label>
+            <input type="text" id="settings-name" placeholder="Enter stack name">
+            <div class="settings-field-help">Display name shown in the UI. Does not affect the project folder name.</div>
+          </div>
+          
+          <div class="settings-field">
+            <label for="settings-description">Description</label>
+            <textarea id="settings-description" placeholder="Enter description for this stack"></textarea>
+            <div class="settings-field-help">Brief description of what this stack does.</div>
+          </div>
+        </div>
+        
+        <!-- Appearance -->
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="fa fa-picture-o"></i> Appearance</div>
+          
+          <div class="settings-field">
+            <label for="settings-icon-url">Icon URL</label>
+            <input type="url" id="settings-icon-url" placeholder="https://example.com/icon.png">
+            <div class="settings-field-help">URL to a custom icon for this stack. Leave empty to use the default icon.</div>
+            <div class="settings-field-icon-preview" id="settings-icon-preview" style="display:none;">
+              <span>Preview:</span>
+              <img id="settings-icon-preview-img" src="" alt="Icon preview" onerror="this.parentElement.style.display='none';">
+            </div>
+          </div>
+        </div>
+        
+        <!-- Advanced -->
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="fa fa-sliders"></i> Advanced</div>
+          
+          <div class="settings-field">
+            <label for="settings-env-path">External ENV File Path</label>
+            <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)">
+            <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the project folder.</div>
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- Modal Footer -->
@@ -2794,7 +3297,7 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
       </div>
       <div class="editor-footer-right">
         <button class="editor-btn editor-btn-cancel" onclick="closeEditorModal()">Cancel</button>
-        <button class="editor-btn editor-btn-save-all" id="editor-btn-save-all" onclick="saveAllTabs()" disabled>Save All</button>
+        <button class="editor-btn editor-btn-save-all" id="editor-btn-save-all" onclick="saveAllChanges()" disabled>Save All</button>
       </div>
     </div>
   </div>

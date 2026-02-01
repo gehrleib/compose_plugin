@@ -89,6 +89,17 @@ switch ($_POST['action']) {
         file_put_contents("$compose_root/$script/description",trim($newDesc));
         echo json_encode( [ 'result' => 'success', 'message' => '' ] );
         break;
+    case 'getDescription':
+        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        if ( ! $script ) {
+            echo json_encode( [ 'result' => 'error', 'message' => 'Stack not specified.' ] );
+            break;
+        }
+        $fileName = "$compose_root/$script/description";
+        $fileContents = is_file($fileName) ? file_get_contents($fileName) : "";
+        $fileContents = str_replace("\r", "", $fileContents);
+        echo json_encode( [ 'result' => 'success', 'content' => $fileContents ] );
+        break;
     case 'getYml':
         $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
         $basePath = getPath("$compose_root/$script");

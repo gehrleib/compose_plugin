@@ -42,14 +42,19 @@
 .editor-modal-close:hover { color: var(--brand-red, #ff4444); }
 .editor-modal-close:focus-visible { outline: 2px solid var(--brand-orange, #ff8c2f); outline-offset: 2px; }
 
-.editor-tabs { display: flex; background-color: var(--background-color, #1e1e1e); border-bottom: 1px solid var(--border-color, #3a3a3a); padding: 0 10px; }
-.editor-tab { padding: 12px 20px; background: transparent; border: none; color: var(--alt-text-color, #888); cursor: pointer; font-size: 0.95rem; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px; }
-.editor-tab:hover { color: var(--text-color, #ccc); background-color: var(--alt-background-color, #2a2a2a); }
-.editor-tab.active { color: var(--brand-orange, #ff8c2f); border-bottom-color: var(--brand-orange, #ff8c2f); background-color: var(--alt-background-color, #2a2a2a); }
+/* Unified Tab Bar */
+.editor-tabs { display: flex; background-color: var(--alt-background-color, #252525); border-bottom: 1px solid var(--border-color, #3a3a3a); padding: 0 10px; }
+.editor-tab { padding: 12px 20px; background: transparent; border: none; color: var(--alt-text-color, #888); cursor: pointer; font-size: 0.95rem; border-bottom: 3px solid transparent; display: flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
+.editor-tab:hover { color: var(--text-color, #ccc); background-color: rgba(255,255,255,0.05); }
+.editor-tab.active { color: var(--brand-orange, #ff8c2f); border-bottom-color: var(--brand-orange, #ff8c2f); background-color: var(--background-color, #1c1c1c); }
 .editor-tab:focus-visible { outline: 2px solid var(--brand-orange, #ff8c2f); outline-offset: -2px; }
-.editor-tab i { font-size: 0.85rem; }
-.editor-tab-modified { width: 8px; height: 8px; background-color: var(--brand-orange, #ff8c2f); border-radius: 50%; display: none; }
+.editor-tab i { font-size: 0.9rem; }
+.editor-tab-modified { width: 8px; height: 8px; background-color: var(--brand-orange, #ff8c2f); border-radius: 50%; display: none; margin-left: 4px; }
 .editor-tab.modified .editor-tab-modified { display: inline-block; }
+
+/* Content Panel Container */
+.editor-panel { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+.editor-panel.active { display: flex; }
 
 .editor-modal-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .editor-container { flex: 1; position: relative; display: none; }
@@ -60,6 +65,49 @@
 .editor-validation.valid { color: #4caf50; }
 .editor-validation.error { color: #f44336; }
 .editor-validation-icon { margin-right: 8px; }
+
+/* Settings Panel Styles */
+.settings-panel { flex: 1; overflow-y: auto; padding: 30px 40px; }
+.settings-section { margin-bottom: 30px; }
+.settings-section-title { font-size: 1.1rem; font-weight: 600; color: var(--brand-orange, #ff8c2f); margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color, #3a3a3a); display: flex; align-items: center; gap: 10px; }
+.settings-section-title i { font-size: 1rem; }
+
+.settings-field { margin-bottom: 20px; }
+.settings-field label { display: block; font-weight: 500; color: var(--text-color, #ccc); margin-bottom: 8px; font-size: 0.95rem; }
+.settings-field input[type="text"],
+.settings-field input[type="url"],
+.settings-field textarea { width: 100%; max-width: 600px; padding: 10px 14px; background-color: var(--input-background-color, #2a2a2a); border: 1px solid var(--border-color, #3a3a3a); border-radius: 4px; color: var(--text-color, #ccc); font-size: 0.95rem; box-sizing: border-box; }
+.settings-field input:focus,
+.settings-field textarea:focus { outline: none; border-color: var(--brand-orange, #ff8c2f); box-shadow: 0 0 0 2px rgba(255, 140, 47, 0.2); }
+.settings-field textarea { min-height: 100px; resize: vertical; font-family: inherit; }
+.settings-field-help { color: var(--alt-text-color, #888); font-size: 0.85rem; margin-top: 6px; }
+.settings-field-icon-preview { display: inline-flex; align-items: center; gap: 10px; margin-top: 8px; }
+.settings-field-icon-preview img { width: 48px; height: 48px; border-radius: 4px; background-color: var(--alt-background-color, #2a2a2a); object-fit: contain; }
+
+/* WebUI Labels Panel Styles */
+.labels-panel { flex: 1; overflow-y: auto; padding: 30px 40px; }
+.labels-panel-header { margin-bottom: 20px; }
+.labels-panel-header p { color: var(--alt-text-color, #888); margin: 0; font-size: 0.95rem; }
+.labels-service { background-color: var(--alt-background-color, #252525); border: 1px solid var(--border-color, #3a3a3a); border-radius: 6px; padding: 20px; margin-bottom: 16px; }
+.labels-service-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color, #3a3a3a); }
+.labels-service-icon { width: 32px; height: 32px; border-radius: 4px; background-color: var(--background-color, #1c1c1c); object-fit: contain; }
+.labels-service-name { font-weight: 600; color: var(--text-color, #ccc); font-size: 1rem; }
+.labels-service-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.labels-field { display: flex; flex-direction: column; }
+.labels-field label { font-size: 0.85rem; color: var(--alt-text-color, #888); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.labels-field label i { font-size: 0.8rem; }
+.labels-field input { padding: 8px 12px; background-color: var(--input-background-color, #1c1c1c); border: 1px solid var(--border-color, #3a3a3a); border-radius: 4px; color: var(--text-color, #ccc); font-size: 0.9rem; }
+.labels-field input:focus { outline: none; border-color: var(--brand-orange, #ff8c2f); }
+.labels-deleted-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color, #3a3a3a); }
+.labels-deleted-title { color: var(--alt-text-color, #666); font-size: 0.9rem; margin-bottom: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+.labels-deleted-title i { transition: transform 0.2s ease; }
+.labels-deleted-title.expanded i { transform: rotate(90deg); }
+.labels-deleted-services { display: none; }
+.labels-deleted-services.visible { display: block; }
+.labels-service.deleted { opacity: 0.6; background-color: rgba(0,0,0,0.2); }
+.labels-service.deleted input { background-color: var(--disabled-input-background-color, #1a1a1a); color: var(--disabled-text-color, #666); }
+.labels-empty-state { text-align: center; padding: 40px 20px; color: var(--alt-text-color, #888); }
+.labels-empty-state i { font-size: 3rem; margin-bottom: 16px; display: block; opacity: 0.5; }
 
 .editor-modal-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; background-color: var(--alt-background-color, #252525); border-top: 1px solid var(--border-color, #3a3a3a); border-radius: 0 0 8px 8px; }
 .editor-footer-left { display: flex; align-items: center; gap: 15px; }
