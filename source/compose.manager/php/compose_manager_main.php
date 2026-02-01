@@ -2907,6 +2907,14 @@ function addComposeStackContext(elementId) {
   
   opts.push({divider: true});
   
+  // Edit Stack
+  opts.push({text: 'Edit Stack', icon: 'fa-edit', action: function(e) {
+    e.preventDefault();
+    openEditorModalByProject(project, projectName);
+  }});
+  
+  opts.push({divider: true});
+  
   // View Logs
   opts.push({text: 'View Logs', icon: 'fa-navicon', action: function(e) {
     e.preventDefault();
