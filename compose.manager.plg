@@ -1,15 +1,15 @@
 <?xml version='1.0' standalone='yes'?>
 <!DOCTYPE PLUGIN [
 <!ENTITY name        "compose.manager">
-<!ENTITY author      "dcflachs">
-<!ENTITY version     "2025.11.01">
+<!ENTITY author      "mstrhakr">
+<!ENTITY version     "0.1.0">
 <!ENTITY launch      "Settings/&name;">
 <!ENTITY packageVER  "&version;">
 <!ENTITY packageMD5  "f69698567a8060a2261aa2a5b0db4878">
 <!ENTITY packageName "&name;-package-&packageVER;">
 <!ENTITY packagefile "&packageName;.txz">
-<!ENTITY github      "dcflachs/compose_plugin">
-<!ENTITY pluginURL   "https://raw.githubusercontent.com/&github;/main/&name;.plg">
+<!ENTITY github      "mstrhakr/compose_plugin">
+<!ENTITY pluginURL   "https://raw.githubusercontent.com/&github;/dev/&name;.plg">
 <!ENTITY packageURL  "https://github.com/&github;/releases/download/&version;/&packagefile;">
 <!ENTITY pluginLOC   "/boot/config/plugins/&name;">
 <!ENTITY emhttpLOC   "/usr/local/emhttp/plugins/&name;">
@@ -25,6 +25,9 @@
 >
 
 <CHANGES>
+###0.1.0
+- Fork from dcflachs/compose_plugin
+- UX improvements for Compose tab
 ###2025.11.01 
 - Docker Compose v2.40.3
 ###2025.05.01
