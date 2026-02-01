@@ -76,9 +76,14 @@ function echoComposeCommand($action)
 			$composeCommand[] = $envPath;
 		}
 
+		// Support multiple profiles (comma-separated)
 		if( $profile ) {
-			$profile = "-g $profile";
-			$composeCommand[] = $profile;
+			$profileList = array_map('trim', explode(',', $profile));
+			foreach ($profileList as $p) {
+				if ($p) {
+					$composeCommand[] = "-g $p";
+				}
+			}
 		}
 
 		if( $debug ) {
@@ -171,6 +176,20 @@ function echoComposeCommandMultiple($action, $paths)
 		if ( is_file("$path/envpath") ) {
 			$envPath = "-e" . trim(file_get_contents("$path/envpath"));
 			$composeCommand[] = $envPath;
+		}
+
+		// Add default profiles for multi-stack operations
+		if ( is_file("$path/default_profile") ) {
+			$defaultProfiles = trim(file_get_contents("$path/default_profile"));
+			if ($defaultProfiles) {
+				// Support comma-separated profiles
+				$profileList = array_map('trim', explode(',', $defaultProfiles));
+				foreach ($profileList as $p) {
+					if ($p) {
+						$composeCommand[] = "-g $p";
+					}
+				}
+			}
 		}
 
 		if( $debug ) {

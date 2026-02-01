@@ -312,10 +312,24 @@ switch ($_POST['action']) {
         $iconUrlFile = "$compose_root/$script/icon_url";
         $iconUrl = is_file($iconUrlFile) ? trim(file_get_contents($iconUrlFile)) : "";
         
+        // Get default profile
+        $defaultProfileFile = "$compose_root/$script/default_profile";
+        $defaultProfile = is_file($defaultProfileFile) ? trim(file_get_contents($defaultProfileFile)) : "";
+        
+        // Get available profiles (from profiles file)
+        $profilesFile = "$compose_root/$script/profiles";
+        $availableProfiles = [];
+        if (is_file($profilesFile)) {
+            $profilesJson = file_get_contents($profilesFile);
+            $availableProfiles = json_decode($profilesJson, true) ?: [];
+        }
+        
         echo json_encode([
             'result' => 'success',
             'envPath' => $envPath,
-            'iconUrl' => $iconUrl
+            'iconUrl' => $iconUrl,
+            'defaultProfile' => $defaultProfile,
+            'availableProfiles' => $availableProfiles
         ]);
         break;
     case 'setStackSettings':
@@ -346,6 +360,20 @@ switch ($_POST['action']) {
                 break;
             }
             file_put_contents($iconUrlFile, $iconUrl);
+        }
+        
+        // Set default profile(s)
+        $defaultProfile = isset($_POST['defaultProfile']) ? trim($_POST['defaultProfile']) : "";
+        $defaultProfileFile = "$compose_root/$script/default_profile";
+        if (empty($defaultProfile)) {
+            if (is_file($defaultProfileFile)) @unlink($defaultProfileFile);
+        } else {
+            // Validate: only allow alphanumeric, underscore, hyphen, comma, space
+            if (!preg_match('/^[a-zA-Z0-9_,\s-]+$/', $defaultProfile)) {
+                echo json_encode(['result' => 'error', 'message' => 'Invalid profile name. Use only letters, numbers, underscores, hyphens, and commas.']);
+                break;
+            }
+            file_put_contents($defaultProfileFile, $defaultProfile);
         }
         
         echo json_encode(['result' => 'success', 'message' => 'Settings saved']);

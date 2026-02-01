@@ -208,7 +208,7 @@ function initEditorModal() {
   });
   
   // Initialize settings field change tracking
-  $('#settings-name, #settings-description, #settings-icon-url, #settings-env-path').on('input', function() {
+  $('#settings-name, #settings-description, #settings-icon-url, #settings-env-path, #settings-default-profile').on('input', function() {
     var fieldId = this.id.replace('settings-', '');
     var currentValue = $(this).val();
     var originalValue = editorModal.originalSettings[fieldId] || '';
@@ -1593,13 +1593,22 @@ function renderStackActionDialog(action, stackName, path, profile, containers) {
   });
 }
 
-function ComposeLogs(myID) {
+function ComposePull(path, profile="") {
   var height = 800;
   var width = 1200;
-  var project = myID;
-  var path = compose_root + "/" + project;
-  console.log(path);
-  $.post(compURL,{action:'composeLogs',path:path},function(data) {
+  $.post(compURL,{action:'composePull',path:path,profile:profile},function(data) {
+    if (data) {
+      openBox(data,"Stack "+basename(path)+" Pull",height,width,true);
+    }
+  })
+}
+
+function ComposeLogs(pathOrProject, profile="") {
+  var height = 800;
+  var width = 1200;
+  // Support both project name (legacy) and path
+  var path = pathOrProject.includes('/') ? pathOrProject : compose_root + "/" + pathOrProject;
+  $.post(compURL,{action:'composeLogs',path:path,profile:profile},function(data) {
     if (data) {
       openBox(data,"Stack "+basename(path)+" Logs",height,width,true);
     }
@@ -1671,7 +1680,7 @@ function executeStackAction(action) {
   closeStackActionsMenu();
   
   // Handle profile selection if profiles exist and action supports it
-  var profileSupportedActions = ['up', 'down', 'update'];
+  var profileSupportedActions = ['up', 'down', 'update', 'pull', 'logs'];
   if (profiles.length > 0 && profileSupportedActions.includes(action)) {
     showProfileSelector(action, path, profiles);
     return;
@@ -1687,8 +1696,11 @@ function executeStackAction(action) {
     case 'update':
       UpdateStack(path);
       break;
+    case 'pull':
+      ComposePull(path);
+      break;
     case 'logs':
-      ComposeLogs(project);
+      ComposeLogs(path);
       break;
     case 'edit':
       openEditorModalByProject(project, projectName);
@@ -1705,40 +1717,66 @@ function showProfileSelector(action, path, profiles) {
   var actionNames = {
     'up': 'Compose Up',
     'down': 'Compose Down',
-    'update': 'Update Stack'
+    'update': 'Update Stack',
+    'pull': 'Pull Images',
+    'logs': 'View Logs'
   };
   
-  // Build profile selection HTML
+  // Build profile selection HTML with checkboxes for multi-select
   var profileHtml = '<div style="text-align: left;">';
-  profileHtml += '<label><input type="radio" name="profile_selection" value="" checked> All Services (Default)</label><br>';
+  profileHtml += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(128,128,128,0.3);">';
+  profileHtml += '<label style="font-weight:bold;"><input type="checkbox" id="profile_all" checked onchange="toggleAllProfiles(this)"> All Services (no profile filter)</label>';
+  profileHtml += '</div>';
+  profileHtml += '<div id="profile_list">';
   profiles.forEach(function(profile) {
-    profileHtml += '<label><input type="radio" name="profile_selection" value="' + profile + '"> ' + profile + '</label><br>';
+    profileHtml += '<label style="display:block;margin:5px 0;"><input type="checkbox" class="profile_checkbox" value="' + escapeHtml(profile) + '" disabled> ' + escapeHtml(profile) + '</label>';
   });
+  profileHtml += '</div>';
+  profileHtml += '<div style="margin-top:10px;font-size:0.9em;color:#888;"><i class="fa fa-info-circle"></i> Select multiple profiles to include services from each.</div>';
   profileHtml += '</div>';
   
   swal({
-    title: "Select Profile",
-    text: "Choose which profile to use for " + actionNames[action] + "<br><br>" + profileHtml,
+    title: "Select Profiles",
+    text: "Choose which profiles to use for " + actionNames[action] + "<br><br>" + profileHtml,
     html: true,
     showCancelButton: true,
     confirmButtonText: "Continue",
     cancelButtonText: "Cancel"
   }, function(confirmed) {
     if (confirmed) {
-      var profile = $('input[name="profile_selection"]:checked').val() || '';
+      var selectedProfiles = [];
+      if (!$('#profile_all').is(':checked')) {
+        $('.profile_checkbox:checked').each(function() {
+          selectedProfiles.push($(this).val());
+        });
+      }
+      // Join profiles with comma for multi-profile support
+      var profileStr = selectedProfiles.join(',');
       switch(action) {
         case 'up':
-          ComposeUp(path, profile);
+          ComposeUp(path, profileStr);
           break;
         case 'down':
-          ComposeDown(path, profile);
+          ComposeDown(path, profileStr);
           break;
         case 'update':
-          UpdateStack(path, profile);
+          UpdateStack(path, profileStr);
+          break;
+        case 'pull':
+          ComposePull(path, profileStr);
+          break;
+        case 'logs':
+          ComposeLogs(path, profileStr);
           break;
       }
     }
   });
+}
+
+// Toggle profile checkboxes when "All Services" is checked/unchecked
+function toggleAllProfiles(checkbox) {
+  var disabled = checkbox.checked;
+  $('.profile_checkbox').prop('disabled', disabled).prop('checked', false);
 }
 
 function openEditorModalByProject(project, projectName, initialTab) {
@@ -1855,14 +1893,31 @@ function loadSettingsData(project, projectName) {
         var envPath = response.envPath || '';
         $('#settings-env-path').val(envPath);
         editorModal.originalSettings['env-path'] = envPath;
+        
+        // Default profile
+        var defaultProfile = response.defaultProfile || '';
+        $('#settings-default-profile').val(defaultProfile);
+        editorModal.originalSettings['default-profile'] = defaultProfile;
+        
+        // Available profiles (from the profiles file)
+        var availableProfiles = response.availableProfiles || [];
+        if (availableProfiles.length > 0) {
+          $('#settings-profiles-list').text(availableProfiles.join(', '));
+          $('#settings-available-profiles').show();
+        } else {
+          $('#settings-available-profiles').hide();
+        }
       }
     }
   }).fail(function() {
     $('#settings-icon-url').val('');
     $('#settings-env-path').val('');
+    $('#settings-default-profile').val('');
     editorModal.originalSettings['icon-url'] = '';
     editorModal.originalSettings['env-path'] = '';
+    editorModal.originalSettings['default-profile'] = '';
     $('#settings-icon-preview').hide();
+    $('#settings-available-profiles').hide();
   });
 }
 
@@ -2267,19 +2322,22 @@ function saveSettings() {
     );
   }
   
-  // Save icon URL and env path if either is modified
-  if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('env-path')) {
+  // Save icon URL, env path, and default profile if any are modified
+  if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile')) {
     var iconUrl = $('#settings-icon-url').val();
     var envPath = $('#settings-env-path').val();
+    var defaultProfile = $('#settings-default-profile').val();
     savePromises.push(
-      $.post(caURL, {action:'setStackSettings', script:project, iconUrl:iconUrl, envPath:envPath}).then(function(data) {
+      $.post(caURL, {action:'setStackSettings', script:project, iconUrl:iconUrl, envPath:envPath, defaultProfile:defaultProfile}).then(function(data) {
         if (data) {
           var response = JSON.parse(data);
           if (response.result === 'success') {
             editorModal.originalSettings['icon-url'] = iconUrl;
             editorModal.originalSettings['env-path'] = envPath;
+            editorModal.originalSettings['default-profile'] = defaultProfile;
             editorModal.modifiedSettings.delete('icon-url');
             editorModal.modifiedSettings.delete('env-path');
+            editorModal.modifiedSettings.delete('default-profile');
             needsReload = true;
             return true;
           }
@@ -2420,7 +2478,9 @@ function doCloseEditorModal() {
   $('#settings-description').val('');
   $('#settings-icon-url').val('');
   $('#settings-env-path').val('');
+  $('#settings-default-profile').val('');
   $('#settings-icon-preview').hide();
+  $('#settings-available-profiles').hide();
   
   // Clear labels container
   $('#labels-services-container').html('');
@@ -3255,6 +3315,19 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
             <label for="settings-env-path">External ENV File Path</label>
             <input type="text" id="settings-env-path" placeholder="Default (uses .env in project folder)">
             <div class="settings-field-help">Path to an external .env file (e.g., /mnt/user/appdata/myapp/.env). Leave empty to use the default .env file in the project folder.</div>
+          </div>
+          
+          <div class="settings-field">
+            <label for="settings-default-profile">Default Profile(s)</label>
+            <input type="text" id="settings-default-profile" placeholder="Leave empty for all services">
+            <div class="settings-field-help">
+              Comma-separated list of profiles to use by default for Autostart and multi-stack operations (e.g., "production,monitoring").
+              <br>Leave empty to start all services. Available profiles are auto-detected from your compose file.
+            </div>
+            <div id="settings-available-profiles" style="margin-top:8px;display:none;">
+              <span style="color:#888;font-size:0.9em;">Available profiles: </span>
+              <span id="settings-profiles-list" style="font-family:monospace;"></span>
+            </div>
           </div>
         </div>
       </div>
