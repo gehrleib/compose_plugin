@@ -72,37 +72,34 @@ foreach ($composeProjects as $project) {
     ? trim(file_get_contents("$compose_root/$project/indirect")) 
     : "$compose_root/$project";
   $composeFile = "$basePath/docker-compose.yml";
+  $overrideFile = "$compose_root/$project/docker-compose.override.yml";
   
-  // Parse compose file to count services (basic YAML parsing)
+  // Use docker compose config --services to get accurate service count
+  // This properly parses YAML, handles overrides, extends, etc.
   $definedServices = 0;
   if (is_file($composeFile)) {
-    $composeContent = @file_get_contents($composeFile);
-    if ($composeContent) {
-      // Count services by looking for top-level keys under 'services:'
-      // Simple approach: count lines that match pattern for service names
-      if (preg_match('/^services:\s*$/m', $composeContent)) {
-        // Find lines after 'services:' that are indented by exactly 2 spaces and have a name followed by colon
-        if (preg_match_all('/^  ([a-zA-Z0-9_-]+):\s*$/m', $composeContent, $matches)) {
-          $definedServices = count($matches[1]);
-        }
+    $files = "-f " . escapeshellarg($composeFile);
+    if (is_file($overrideFile)) {
+      $files .= " -f " . escapeshellarg($overrideFile);
+    }
+    
+    // Get env file if specified
+    $envFile = "";
+    if (is_file("$compose_root/$project/envpath")) {
+      $envPath = trim(file_get_contents("$compose_root/$project/envpath"));
+      if (is_file($envPath)) {
+        $envFile = "--env-file " . escapeshellarg($envPath);
       }
     }
-  }
-  
-  // Also check override file
-  $overrideFile = "$compose_root/$project/docker-compose.override.yml";
-  if (is_file($overrideFile)) {
-    $overrideContent = @file_get_contents($overrideFile);
-    if ($overrideContent && preg_match('/^services:\s*$/m', $overrideContent)) {
-      if (preg_match_all('/^  ([a-zA-Z0-9_-]+):\s*$/m', $overrideContent, $matches)) {
-        // Add any new services from override (avoid double counting)
-        $definedServices = max($definedServices, count($matches[1]));
-      }
+    
+    // Use docker compose config --services to list all service names
+    $cmd = "docker compose $files $envFile config --services 2>/dev/null";
+    $output = shell_exec($cmd);
+    if ($output) {
+      $services = array_filter(explode("\n", trim($output)));
+      $definedServices = count($services);
     }
   }
-  
-  // If parsing failed, fallback to 0
-  if ($definedServices < 1) $definedServices = 0;
 
   // Get running container info from $containersByProject
   $sanitizedProjectName = sanitizeStr($projectName);
