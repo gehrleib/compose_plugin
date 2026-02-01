@@ -1,4 +1,8 @@
 <?PHP
+/**
+ * Compose Manager Main Page
+ * The stack list is loaded asynchronously via AJAX for better UX
+ */
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
@@ -8,311 +12,8 @@ $cfg = parse_plugin_cfg($sName);
 $autoCheckUpdates = ($cfg['AUTO_CHECK_UPDATES'] ?? 'false') === 'true';
 $autoCheckDays = floatval($cfg['AUTO_CHECK_UPDATES_DAYS'] ?? '1');
 
-function createComboButton($text, $id, $onClick, $onClickParams, $items) {
-  $o = "";
-
-  $o .= "<div class='combo-btn-group'>";
-  $o .= "<input type='button' value='$text' class='combo-btn-group-left' id='$id-left-btn' onclick='$onClick($onClickParams);'>";
-  $o .= "<section class='combo-btn-subgroup dropdown'>";
-  $o .= "<button type='button' class='dropdown-toggle combo-btn-group-right' data-toggle='dropdown'><i class='fa fa-caret-down'></i></button>";
-  $o .= "<div class='dropdown-content'>";
-  foreach ( $items as $item )
-  {
-    $o .= "<a href='#' onclick='$onClick($onClickParams, &quot;$item&quot;);'>$item</a>";
-  }
-  $o .= "</div>";
-  $o .= "</section>";
-  $o .= "</div>";
-
-  return $o;
-}
-
-$vars = parse_ini_file("/var/local/emhttp/var.ini");
-
-$stackstate = shell_exec($plugin_root."/scripts/compose.sh -c list");
-$stackstate = json_decode($stackstate, TRUE);
-
-// Get all compose containers with status/uptime info
-$containersOutput = shell_exec($plugin_root."/scripts/compose.sh -c ps");
-$containersByProject = [];
-if ($containersOutput) {
-  $lines = explode("\n", trim($containersOutput));
-  foreach ($lines as $line) {
-    if (!empty($line)) {
-      $container = json_decode($line, true);
-      if ($container && isset($container['Labels'])) {
-        // Extract project name from labels
-        if (preg_match('/com\.docker\.compose\.project=([^,]+)/', $container['Labels'], $matches)) {
-          $projectName = $matches[1];
-          if (!isset($containersByProject[$projectName])) {
-            $containersByProject[$projectName] = [];
-          }
-          $containersByProject[$projectName][] = $container;
-        }
-      }
-    }
-  }
-}
-
-$composeProjects = @array_diff(@scandir($compose_root),array(".",".."));
-if ( ! is_array($composeProjects) ) {
-  $composeProjects = array();
-}
-$o = "";
-foreach ($composeProjects as $project) {
-  if ( ( ! is_file("$compose_root/$project/docker-compose.yml") ) &&
-       ( ! is_file("$compose_root/$project/indirect") ) ) {
-    continue;
-  }
-
-  $projectName = $project;
-  if ( is_file("$compose_root/$project/name") ) {
-    $projectName = trim(file_get_contents("$compose_root/$project/name"));
-  }
-  $id = str_replace(".","-",$project);
-  $id = str_replace(" ","",$id);
-
-  // Get the compose file path
-  $basePath = is_file("$compose_root/$project/indirect") 
-    ? trim(file_get_contents("$compose_root/$project/indirect")) 
-    : "$compose_root/$project";
-  $composeFile = "$basePath/docker-compose.yml";
-  $overrideFile = "$compose_root/$project/docker-compose.override.yml";
-  
-  // Use docker compose config --services to get accurate service count
-  // This properly parses YAML, handles overrides, extends, etc.
-  $definedServices = 0;
-  if (is_file($composeFile)) {
-    $files = "-f " . escapeshellarg($composeFile);
-    if (is_file($overrideFile)) {
-      $files .= " -f " . escapeshellarg($overrideFile);
-    }
-    
-    // Get env file if specified
-    $envFile = "";
-    if (is_file("$compose_root/$project/envpath")) {
-      $envPath = trim(file_get_contents("$compose_root/$project/envpath"));
-      if (is_file($envPath)) {
-        $envFile = "--env-file " . escapeshellarg($envPath);
-      }
-    }
-    
-    // Use docker compose config --services to list all service names
-    $cmd = "docker compose $files $envFile config --services 2>/dev/null";
-    $output = shell_exec($cmd);
-    if ($output) {
-      $services = array_filter(explode("\n", trim($output)));
-      $definedServices = count($services);
-    }
-  }
-
-  // Get running container info from $containersByProject
-  $sanitizedProjectName = sanitizeStr($projectName);
-  $projectContainers = $containersByProject[$sanitizedProjectName] ?? [];
-  $runningCount = 0;
-  $stoppedCount = 0;
-  $pausedCount = 0;
-  $restartingCount = 0;
-  
-  foreach ($projectContainers as $ct) {
-    $ctState = $ct['State'] ?? '';
-    if ($ctState === 'running') {
-      $runningCount++;
-    } elseif ($ctState === 'exited') {
-      $stoppedCount++;
-    } elseif ($ctState === 'paused') {
-      $pausedCount++;
-    } elseif ($ctState === 'restarting') {
-      $restartingCount++;
-    }
-  }
-  
-  // Container counts
-  $actualContainerCount = count($projectContainers);
-  $containerCount = $definedServices > 0 ? $definedServices : $actualContainerCount;
-  
-  // Determine states
-  $isrunning = $runningCount > 0;
-  $isexited = $stoppedCount > 0;
-  $ispaused = $pausedCount > 0;
-  $isrestarting = $restartingCount > 0;
-  $isup = $actualContainerCount > 0;
-
-  if ( is_file("$compose_root/$project/description") ) {
-    $description = @file_get_contents("$compose_root/$project/description");
-    $description = str_replace("\r","",$description);
-    $description = str_replace("\n","<br>",$description);
-  } else {
-    $description = isset($variables['description']) ? $variables['description'] : "No description<br>($compose_root/$project)";
-  }
-
-  $autostart = '';
-  if ( is_file("$compose_root/$project/autostart") ) {
-    $autostarttext = @file_get_contents("$compose_root/$project/autostart");
-    if ( strpos($autostarttext, 'true') !== false ) {
-      $autostart = 'checked';
-    }
-  }
-
-  // Check for custom project icon (URL-based only via icon_url file)
-  $projectIcon = '';
-  if (is_file("$compose_root/$project/icon_url")) {
-    $iconUrl = trim(@file_get_contents("$compose_root/$project/icon_url"));
-    if (filter_var($iconUrl, FILTER_VALIDATE_URL) && (strpos($iconUrl, 'http://') === 0 || strpos($iconUrl, 'https://') === 0)) {
-      $projectIcon = $iconUrl;
-    }
-  }
-
-  $profiles = array();
-  if ( is_file("$compose_root/$project/profiles") ) {
-    $profilestext = @file_get_contents("$compose_root/$project/profiles");
-    $profiles = json_decode($profilestext, false);
-  }
-  $profilesJson = json_encode($profiles ? $profiles : []);
-
-  // Determine status text and class for badge
-  $statusText = "Stopped";
-  $statusClass = "status-stopped";
-  if ( $isup ) {
-    if ( $isexited && !$isrunning ) {
-      $statusText = "Exited";
-      $statusClass = "status-exited";
-    } elseif ( $isrunning && !$isexited && !$ispaused && !$isrestarting ) {
-      $statusText = "Running";
-      $statusClass = "status-running";
-    } elseif ( $ispaused && !$isexited && !$isrunning && !$isrestarting ) {
-      $statusText = "Paused";
-      $statusClass = "status-paused";
-    } elseif ( $ispaused && !$isexited ) {
-      $statusText = "Partial";
-      $statusClass = "status-partial";
-    } elseif ( $isrestarting ) {
-      $statusText = "Restarting";
-      $statusClass = "status-restarting";
-    } else {
-      $statusText = "Mixed";
-      $statusClass = "status-mixed";
-    }
-  }
-
-  // Escape for HTML output
-  $projectNameHtml = htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8');
-  $projectHtml = htmlspecialchars($project, ENT_QUOTES, 'UTF-8');
-  $descriptionHtml = $description; // Already contains <br> tags from earlier processing
-  $pathHtml = htmlspecialchars("$compose_root/$project", ENT_QUOTES, 'UTF-8');
-  $projectIconUrl = htmlspecialchars($projectIcon, ENT_QUOTES, 'UTF-8');
-
-  // Status like Docker tab (started/stopped with icon)
-  $shape = $isrunning ? 'play' : 'square';
-  $status = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';
-  $color = $status == 'started' ? 'green-text' : ($status == 'partial' ? 'orange-text' : 'grey-text');
-  $outerClass = $isrunning ? ($runningCount == $containerCount ? 'started' : 'paused') : 'stopped';
-  
-  $statusLabel = $status;
-  if ($status == 'partial') {
-    $statusLabel = "partial ($runningCount/$containerCount)";
-  }
-
-  // Calculate stack uptime from containers
-  $stackUptime = '';
-  $sanitizedProjectName = sanitizeStr($projectName);
-  if (isset($containersByProject[$sanitizedProjectName])) {
-    $projectContainers = $containersByProject[$sanitizedProjectName];
-    $longestUptime = '';
-    foreach ($projectContainers as $ct) {
-      if (isset($ct['Status']) && strpos($ct['Status'], 'Up') === 0) {
-        // Extract uptime from Status like "Up 6 months (healthy)"
-        if (preg_match('/Up ([^(]+)/', $ct['Status'], $uptimeMatch)) {
-          $longestUptime = trim($uptimeMatch[1]);
-          break; // Use first running container's uptime
-        }
-      }
-    }
-    if ($longestUptime) {
-      $stackUptime = "Uptime: " . $longestUptime;
-    }
-  }
-  if (!$stackUptime && $isrunning) {
-    $stackUptime = "Uptime: running";
-  } elseif (!$stackUptime) {
-    $stackUptime = "stopped";
-  }
-
-  // Main row - Docker tab structure with expand arrow on left
-  $o .= "<tr class='sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson'>";
-  
-  // Name column: expand arrow, then icon with context menu, then name
-  $o .= "<td class='ct-name' style='width:220px;padding:8px'>";
-  // Expand arrow on the left (separate from the outer/inner structure)
-  $o .= "<span style='display:inline-block;width:20px;text-align:center;vertical-align:middle;'>";
-  $o .= "<i class='fa fa-chevron-right expand-icon' id='expand-icon-$id' onclick='toggleStackDetails(\"$id\");event.stopPropagation();' style='cursor:pointer;'></i>";
-  $o .= "</span>";
-  // Icon and name using Docker's outer/inner structure
-  $o .= "<span class='outer $outerClass'>";
-  $o .= "<span id='stack-$id' class='hand' data-stackid='$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-isup='$isup' data-running='" . ($isrunning ? '1' : '0') . "'>";
-  // Use actual image - either custom icon URL or default question.png like Docker tab
-  $imgSrc = $projectIconUrl ?: '/plugins/dynamix.docker.manager/images/question.png';
-  $o .= "<img src='$imgSrc' class='img' onerror=\"this.src='/plugins/dynamix.docker.manager/images/question.png';\">";
-  $o .= "</span>";
-  $o .= "<span class='inner'><span class='appname'>$projectNameHtml</span><br>";
-  $o .= "<i class='fa fa-$shape $status $color'></i><span class='state'>$statusLabel</span>";
-  // Advanced: show project folder
-  $o .= "<div class='advanced' style='margin-top:4px;font-size:0.85em;color:#888;'>";
-  $o .= "Project: $projectHtml";
-  $o .= "</div>";
-  $o .= "</span></span>";
-  $o .= "</td>";
-  
-  // Update column (like Docker tab) - default to "not checked" until update check runs
-  $o .= "<td class='updatecolumn'>";
-  if ($isrunning) {
-    $o .= "<span class='grey-text' style='white-space:nowrap;cursor:default;' title='Click Check for Updates to check'><i class='fa fa-question-circle fa-fw'></i> not checked</span>";
-  } else {
-    $o .= "<span class='grey-text' style='white-space:nowrap;'><i class='fa fa-docker fa-fw'></i> stopped</span>";
-  }
-  $o .= "</td>";
-  
-  // Containers column (shows running/total)
-  $containersDisplay = $isrunning ? "$runningCount / $containerCount" : "0 / $containerCount";
-  $containersClass = ($runningCount == $containerCount && $runningCount > 0) ? 'green-text' : ($runningCount > 0 ? 'orange-text' : 'grey-text');
-  $o .= "<td><span class='$containersClass'>$containersDisplay</span></td>";
-  
-  // Uptime column (both basic and advanced views)
-  $uptimeDisplay = $stackUptime;
-  $uptimeClass = $isrunning ? 'green-text' : 'grey-text';
-  $o .= "<td><span class='$uptimeClass'>$uptimeDisplay</span></td>";
-  
-  // Description column (advanced only)
-  $o .= "<td class='advanced' style='word-break:break-all;'><span class='docker_readmore'>$descriptionHtml</span></td>";
-  
-  // Version/Image info column (advanced only) - shows compose file info
-  $composeVersion = '';
-  if (isset($containersByProject[$sanitizedProjectName][0]['Labels'])) {
-    if (preg_match('/com\.docker\.compose\.version=([^,]+)/', $containersByProject[$sanitizedProjectName][0]['Labels'], $vMatch)) {
-      $composeVersion = 'Compose v' . $vMatch[1];
-    }
-  }
-  $o .= "<td class='advanced' style='color:#606060;font-size:12px;'>$composeVersion</td>";
-  
-  // Path column (advanced only)
-  $o .= "<td class='advanced' style='color:#606060;font-size:12px;'>$pathHtml</td>";
-  
-  // Auto Start toggle
-  $o .= "<td class='nine'>";
-  $o .= "<input type='checkbox' class='auto_start autostart' data-scriptName='$projectHtml' id='autostart-$id' $autostart>";
-  $o .= "</td>";
-  
-  $o .= "</tr>";
-  
-  // Expandable details row (hidden by default)
-  $o .= "<tr class='stack-details-row' id='details-row-$id' style='display:none;'>";
-  $o .= "<td colspan='10' class='stack-details-cell' style='padding:0 0 0 60px;background:rgba(0,0,0,0.05);'>";
-  $o .= "<div class='stack-details-container' id='details-container-$id' style='padding:8px 16px;'>";
-  $o .= "<i class='fa fa-spinner fa-spin'></i> Loading containers...";
-  $o .= "</div>";
-  $o .= "</td>";
-  $o .= "</tr>";
-}
+// Note: Stack list is now loaded asynchronously via compose_list.php
+// This improves page load time by deferring expensive docker commands
 ?>
 
 <script src="/plugins/compose.manager/javascript/ace/ace.js" type= "text/javascript"></script>
@@ -329,6 +30,73 @@ const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 // Auto-check settings from config
 var autoCheckUpdates = <?php echo json_encode($autoCheckUpdates); ?>;
 var autoCheckDays = <?php echo json_encode($autoCheckDays); ?>;
+
+// Timers for async operations (like Docker tab)
+var timers = {};
+
+// Load stack list asynchronously (like Docker tab's loadlist)
+function loadlist() {
+  // Show spinner after short delay to avoid flash on fast loads
+  timers.compose = setTimeout(function(){
+    $('div.spinner.fixed').show('slow');
+  }, 500);
+  
+  $.get('/plugins/compose.manager/php/compose_list.php', function(data) {
+    clearTimeout(timers.compose);
+    
+    // Insert the loaded content
+    $('#compose_list').html(data);
+    
+    // Initialize UI components for the newly loaded content
+    initStackListUI();
+    
+    // Hide spinner
+    $('div.spinner.fixed').hide('slow');
+    
+    // Show buttons now that content is loaded
+    $('input[type=button]').show();
+  }).fail(function() {
+    clearTimeout(timers.compose);
+    $('div.spinner.fixed').hide('slow');
+    $('#compose_list').html('<tr><td colspan="8" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
+  });
+}
+
+// Initialize UI components after stack list is loaded
+function initStackListUI() {
+  // Initialize autostart switches
+  $('.auto_start').switchButton({labels_placement:'right', on_label:"On", off_label:"Off"});
+  $('.auto_start').change(function(){
+    var script = $(this).attr("data-scriptname");
+    var auto = $(this).prop('checked');
+    $.post(caURL, {action:'updateAutostart', script:script, autostart:auto});
+  });
+  
+  // Initialize context menus for stack icons
+  $('[id^="stack-"][data-stackid]').each(function() {
+    addComposeStackContext(this.id);
+  });
+  
+  // Apply readmore to descriptions
+  $('.docker_readmore').readmore({
+    maxHeight: 32,
+    moreLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",
+    lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
+  });
+  
+  // Apply current view mode (advanced/basic)
+  var advanced = $.cookie('compose_listview_mode') === 'advanced';
+  if (advanced) {
+    $('.advanced').show();
+    $('.basic').hide();
+  } else {
+    $('.advanced').hide();
+    $('.basic').show();
+  }
+  
+  // Load saved update status after list is loaded
+  loadSavedUpdateStatus();
+}
 
 $('head').append( $('<link rel="stylesheet" type="text/css" />').attr('href', '<?autov("/plugins/compose.manager/styles/comboButton.css");?>') );
 $('head').append( $('<link rel="stylesheet" type="text/css" />').attr('href', '<?autov("/plugins/compose.manager/styles/editorModal.css");?>') );
@@ -863,7 +631,7 @@ $(function() {
   editor.setShowPrintMargin(false);
 })
 
-// Apply advanced/basic view based on cookie
+// Apply advanced/basic view based on cookie (used after async load)
 function applyListView() {
   var advanced = $.cookie('compose_listview_mode') === 'advanced';
   if (advanced) {
@@ -905,17 +673,6 @@ $(function() {
                                     </center>");
 		}
 	});
-  $('.auto_start').switchButton({labels_placement:'right', on_label:"On", off_label:"Off"});
-  $('.auto_start').change(function(){
-      var script = $(this).attr("data-scriptname");
-      var auto = $(this).prop('checked');
-      $.post(caURL,{action:'updateAutostart',script:script,autostart:auto});
-    });
-  
-  // Initialize context menus for stack icons
-  $('[id^="stack-"][data-stackid]').each(function() {
-    addComposeStackContext(this.id);
-  });
   
   // Add Advanced View toggle (like Docker tab)
   $(".tabs").append('<span class="status"><span><input type="checkbox" class="advancedview"></span></span>');
@@ -926,12 +683,6 @@ $(function() {
     $('.basic').toggle();
     $.cookie('compose_listview_mode', $('.advancedview').is(':checked') ? 'advanced' : 'basic', {expires:3650});
   });
-  
-  // Apply initial view state
-  applyListView();
-  
-  // Load saved update status on page load
-  loadSavedUpdateStatus();
   
   // Set up MutationObserver to detect when ebox (progress dialog) closes
   // This is used to trigger update check after an update operation completes
@@ -957,6 +708,10 @@ $(function() {
   
   // Start observing the body for changes (ebox gets added/removed from body)
   eboxObserver.observe(document.body, { childList: true, subtree: true });
+  
+  // Load the stack list asynchronously (like Docker tab)
+  // This defers the expensive docker commands to after the page renders
+  loadlist();
 });
 
 function addStack() {
@@ -3132,7 +2887,7 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
   <th class="nine">Autostart</th>
 </tr></thead>
 <tbody id="compose_list">
-<?=$o?>
+<tr><td colspan='8'></td></tr>
 </tbody>
 </table>
 <span class='tipsterallowed' hidden><input type='button' value='Add New Stack' onclick='addStack();'><input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn' style='margin-left:10px;'><span><br>
