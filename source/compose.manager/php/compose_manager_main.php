@@ -606,8 +606,8 @@ function updateStackUpdateUI(stackName, stackInfo) {
     $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><i class="fa fa-cloud-download fa-fw"></i> pull updates</a>');
   }
   
-  // Rebuild context menus to reflect update status
-  $('[id^="stack-"][data-project="' + stackName + '"]').each(function() {
+  // Rebuild context menus to reflect update status (only target icon spans with data-stackid, not the row)
+  $('[id^="stack-"][data-stackid][data-project="' + stackName + '"]').each(function() {
     addComposeStackContext(this.id);
   });
   
