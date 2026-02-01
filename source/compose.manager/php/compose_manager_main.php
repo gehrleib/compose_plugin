@@ -1241,6 +1241,148 @@ function UpdateStack(path, profile="") {
   showStackActionDialog('update', path, profile);
 }
 
+// Start All Stacks function
+function startAllStacks() {
+  var autostartOnly = $('#autostartOnlyToggle').is(':checked');
+  var stacks = [];
+  
+  // Collect all stacks from the table
+  $('tr.sortable').each(function() {
+    var $row = $(this);
+    var project = $row.data('project');
+    var projectName = $row.data('projectname');
+    var path = $row.data('path');
+    var isUp = $row.data('isup');
+    var autostart = $row.find('.autostart').is(':checked');
+    
+    // Skip if autostart only mode and autostart is not enabled
+    if (autostartOnly && !autostart) return;
+    
+    // Only include stopped stacks
+    var $stateEl = $row.find('.state');
+    var stateText = $stateEl.text();
+    if (stateText === 'stopped' || !isUp) {
+      stacks.push({
+        project: project,
+        projectName: projectName,
+        path: path
+      });
+    }
+  });
+  
+  if (stacks.length === 0) {
+    swal({
+      title: 'No Stacks to Start',
+      text: autostartOnly ? 'No stopped stacks with Autostart enabled found.' : 'No stopped stacks found.',
+      type: 'info'
+    });
+    return;
+  }
+  
+  var stackNames = stacks.map(function(s) { return escapeHtml(s.projectName); }).join('<br>');
+  var title = autostartOnly ? 'Start Autostart Stacks?' : 'Start All Stacks?';
+  var confirmText = autostartOnly ? 'Yes, start ' + stacks.length + ' autostart stack' + (stacks.length > 1 ? 's' : '') : 'Yes, start ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
+  
+  swal({
+    title: title,
+    html: true,
+    text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be started:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div></div>',
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: confirmText,
+    cancelButtonText: 'Cancel'
+  }, function(confirmed) {
+    if (confirmed) {
+      executeStartAllStacks(stacks);
+    }
+  });
+}
+
+function executeStartAllStacks(stacks) {
+  var height = 800;
+  var width = 1200;
+  
+  // Create a list of paths to start
+  var paths = stacks.map(function(s) { return s.path; });
+  
+  $.post(compURL, {action:'composeUpMultiple', paths:JSON.stringify(paths)}, function(data) {
+    if (data) {
+      openBox(data, 'Start All Stacks', height, width, true);
+    }
+  });
+}
+
+// Stop All Stacks function
+function stopAllStacks() {
+  var autostartOnly = $('#autostartOnlyToggle').is(':checked');
+  var stacks = [];
+  
+  // Collect all stacks from the table
+  $('tr.sortable').each(function() {
+    var $row = $(this);
+    var project = $row.data('project');
+    var projectName = $row.data('projectname');
+    var path = $row.data('path');
+    var isUp = $row.data('isup');
+    var autostart = $row.find('.autostart').is(':checked');
+    
+    // Skip if autostart only mode and autostart is not enabled
+    if (autostartOnly && !autostart) return;
+    
+    // Only include running stacks
+    var $stateEl = $row.find('.state');
+    var stateText = $stateEl.text();
+    if (stateText !== 'stopped' && isUp) {
+      stacks.push({
+        project: project,
+        projectName: projectName,
+        path: path
+      });
+    }
+  });
+  
+  if (stacks.length === 0) {
+    swal({
+      title: 'No Stacks to Stop',
+      text: autostartOnly ? 'No running stacks with Autostart enabled found.' : 'No running stacks found.',
+      type: 'info'
+    });
+    return;
+  }
+  
+  var stackNames = stacks.map(function(s) { return escapeHtml(s.projectName); }).join('<br>');
+  var title = autostartOnly ? 'Stop Autostart Stacks?' : 'Stop All Stacks?';
+  var confirmText = autostartOnly ? 'Yes, stop ' + stacks.length + ' autostart stack' + (stacks.length > 1 ? 's' : '') : 'Yes, stop ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
+  
+  swal({
+    title: title,
+    html: true,
+    text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be stopped:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;margin-top:10px;"><i class="fa fa-exclamation-triangle"></i> Containers will be stopped and removed. Data in volumes will be preserved.</p></div>',
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: confirmText,
+    cancelButtonText: 'Cancel'
+  }, function(confirmed) {
+    if (confirmed) {
+      executeStopAllStacks(stacks);
+    }
+  });
+}
+
+function executeStopAllStacks(stacks) {
+  var height = 800;
+  var width = 1200;
+  
+  // Create a list of paths to stop
+  var paths = stacks.map(function(s) { return s.path; });
+  
+  $.post(compURL, {action:'composeDownMultiple', paths:JSON.stringify(paths)}, function(data) {
+    if (data) {
+      openBox(data, 'Stop All Stacks', height, width, true);
+    }
+  });
+}
+
 // Helper to merge update status into containers array
 function mergeUpdateStatus(containers, project) {
   if (!containers || !stackUpdateStatus[project] || !stackUpdateStatus[project].containers) {
@@ -2890,7 +3032,18 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
 <tr><td colspan='8'></td></tr>
 </tbody>
 </table>
-<span class='tipsterallowed' hidden><input type='button' value='Add New Stack' onclick='addStack();'><input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn' style='margin-left:10px;'><span><br>
+<span class='tipsterallowed' hidden>
+<input type='button' value='Add New Stack' onclick='addStack();'>
+<input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn' style='margin-left:10px;'>
+<span style='margin-left:20px;'>
+  <input type='button' value='Start All' onclick='startAllStacks();' id='startAllBtn'>
+  <input type='button' value='Stop All' onclick='stopAllStacks();' id='stopAllBtn' style='margin-left:5px;'>
+  <label style='margin-left:10px;cursor:pointer;vertical-align:middle;' title='When enabled, only stacks with Autostart enabled will be affected'>
+    <input type='checkbox' id='autostartOnlyToggle' style='vertical-align:middle;'>
+    <span style='vertical-align:middle;'>Autostart only</span>
+  </label>
+</span>
+</span><br>
 
 <!-- Stack Actions Modal -->
 <div id="stack-actions-modal" class="stack-actions-modal" style="display:none;">
