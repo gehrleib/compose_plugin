@@ -485,9 +485,18 @@ switch ($_POST['action']) {
                             $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
                             $localSha = '';
                             $remoteSha = '';
-                            if (isset($updateStatusData[$image])) {
-                                $localSha = $updateStatusData[$image]['local'] ?? '';
-                                $remoteSha = $updateStatusData[$image]['remote'] ?? '';
+                            
+                            // Try to find the image in the status file
+                            // Docker Hub official images are stored with library/ prefix
+                            $imageLookupKey = $image;
+                            if (!isset($updateStatusData[$image]) && strpos($image, '/') === false) {
+                                // Try with library/ prefix for Docker Hub official images
+                                $imageLookupKey = 'library/' . $image;
+                            }
+                            
+                            if (isset($updateStatusData[$imageLookupKey])) {
+                                $localSha = $updateStatusData[$imageLookupKey]['local'] ?? '';
+                                $remoteSha = $updateStatusData[$imageLookupKey]['remote'] ?? '';
                                 // Shorten SHA for display (first 12 chars after sha256:)
                                 if ($localSha && strpos($localSha, 'sha256:') === 0) {
                                     $localSha = substr($localSha, 7, 12);
@@ -615,9 +624,18 @@ switch ($_POST['action']) {
                                 $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
                                 $localSha = '';
                                 $remoteSha = '';
-                                if (isset($updateStatusData[$image])) {
-                                    $localSha = $updateStatusData[$image]['local'] ?? '';
-                                    $remoteSha = $updateStatusData[$image]['remote'] ?? '';
+                                
+                                // Try to find the image in the status file
+                                // Docker Hub official images are stored with library/ prefix
+                                $imageLookupKey = $image;
+                                if (!isset($updateStatusData[$image]) && strpos($image, '/') === false) {
+                                    // Try with library/ prefix for Docker Hub official images
+                                    $imageLookupKey = 'library/' . $image;
+                                }
+                                
+                                if (isset($updateStatusData[$imageLookupKey])) {
+                                    $localSha = $updateStatusData[$imageLookupKey]['local'] ?? '';
+                                    $remoteSha = $updateStatusData[$imageLookupKey]['remote'] ?? '';
                                     // Shorten SHA for display (first 12 chars after sha256:)
                                     if ($localSha && strpos($localSha, 'sha256:') === 0) {
                                         $localSha = substr($localSha, 7, 12);
