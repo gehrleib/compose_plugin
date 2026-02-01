@@ -23,6 +23,8 @@
          icon="cubes"
          min="6.9.0"
          support="https://github.com/mstrhakr/compose_plugin/issues"
+         project="https://github.com/mstrhakr/compose_plugin"
+         readme="https://github.com/mstrhakr/compose_plugin#readme"
 >
 
 <CHANGES>
