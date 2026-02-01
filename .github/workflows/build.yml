@@ -132,8 +132,8 @@ jobs:
           VERSION="${{ needs.build.outputs.version }}"
           
           # Read component versions from release_info
-          if [[ -f artifacts/archive/release_info ]]; then
-            COMPONENTS=$(cat artifacts/archive/release_info)
+          if [[ -f artifacts/release_info ]]; then
+            COMPONENTS=$(cat artifacts/release_info)
           else
             COMPONENTS="Compose v${{ env.COMPOSE_VERSION }}"
           fi
@@ -146,7 +146,7 @@ jobs:
           
           **Via Plugin Manager:**
           \`\`\`
-          https://raw.githubusercontent.com/${{ github.repository }}/dev/${{ env.PLUGIN_NAME }}.plg
+          https://raw.githubusercontent.com/${{ github.repository }}/main/${{ env.PLUGIN_NAME }}.plg
           \`\`\`
           
           ### Package Details
@@ -162,7 +162,7 @@ jobs:
           name: "Compose Manager v${{ needs.build.outputs.version }}"
           body_path: release_body.md
           files: |
-            artifacts/archive/*.txz
+            artifacts/*.txz
           fail_on_unmatched_files: true
           draft: false
           prerelease: false
