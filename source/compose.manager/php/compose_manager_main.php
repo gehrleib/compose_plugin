@@ -324,11 +324,6 @@ const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 $('head').append( $('<link rel="stylesheet" type="text/css" />').attr('href', '<?autov("/plugins/compose.manager/styles/comboButton.css");?>') );
 $('head').append( $('<link rel="stylesheet" type="text/css" />').attr('href', '<?autov("/plugins/compose.manager/styles/editorModal.css");?>') );
 
-if (typeof swal2 === "undefined") {
-    $('head').append( $('<link rel="stylesheet" type="text/css" />').attr('href', '<?autov("/plugins/compose.manager/styles/sweetalert2.css");?>') );
-		$.getScript( '/plugins/compose.manager/javascript/sweetalert/sweetalert2.min.js');
-}
-
 function basename( path ) {
   return path.replace( /\\/g, '/' ).replace( /.*\//, '' );
 }
@@ -887,9 +882,7 @@ $(function() {
 });
 
 function addStack() {
-  var form = document.createElement("div");
-  // form.classList.add("swal-content");
-  form.innerHTML = `<input type="text" id="stack_name" class="swal-content__input" placeholder="stack_name">
+  var formHtml = `<input type="text" id="stack_name" class="swal-content__input" placeholder="stack_name">
                     <br>
                     <details>
                       <summary style="text-align: left">Advanced</summary>
@@ -901,22 +894,24 @@ function addStack() {
                         <input type="url" id="git_url" class="swal-content__input" style="margin-top: 20px" placeholder="https://github.com/example/repo.git">
                       </div>
                     </details>`;
-  swal2({
+  swal({
     title: "Add New Compose Stack",
-    text: "Enter in the name for the stack",
-    content: form,
-    buttons: true,
-  }).then((inputValue) => {
-    if (inputValue) {
+    text: formHtml,
+    html: true,
+    showCancelButton: true,
+    confirmButtonText: "OK",
+    closeOnConfirm: false
+  }, function(confirmed) {
+    if (confirmed) {
       var new_stack_name = document.getElementById("stack_name").value;
       var new_stack_dir = document.getElementById("stack_path").value;
       var git_url = document.getElementById("git_url").value;
       if (!new_stack_name) {
-        swal2({
+        swal({
           title: "Failed to create stack.",
           text: "Stack name unspecified.",
-          icon: "error",
-        })
+          type: "error"
+        });
       }
       else {
         $.post(
@@ -925,20 +920,20 @@ function addStack() {
           function(data) {
             var title = "Failed to create stack.";
             var message = "";
-            var icon = "error";
+            var type = "error";
             if (data) {
               var response = JSON.parse(data);
               if (response.result == "success") {
                 title = "Success";
               }
               message = response.message;
-              icon = response.result;
+              type = response.result;
             }
-            swal2({
+            swal({
               title: title,
               text: message,
-              icon: icon,
-            }).then(() => {
+              type: type
+            }, function() {
               location.reload();
             });
           }
@@ -951,26 +946,26 @@ function addStack() {
 function deleteStack(myID) {
   var stackName = $("#"+myID).attr("data-scriptname");
   var project = $("#"+myID).attr("data-namename");
-  var element = document.createElement("div")
-  element.innerHTML = "Are you sure you want to delete <font color='red'><b>"+project+"</b></font> (<font color='green'>"+compose_root+"/"+stackName+"</font>)?"; 
-  swal2({
-    content: element,
+  var msgHtml = "Are you sure you want to delete <font color='red'><b>"+project+"</b></font> (<font color='green'>"+compose_root+"/"+stackName+"</font>)?"; 
+  swal({
     title: "Delete Stack?",
-    icon: "warning",
-    buttons: true,
-    dangerMode: true,
-  }).then((willDelete) => {
-    if (willDelete) {
+    text: msgHtml,
+    html: true,
+    type: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Delete",
+    cancelButtonText: "Cancel"
+  }, function(confirmed) {
+    if (confirmed) {
       $.post(caURL,{action:'deleteStack',stackName:stackName},function(data) {
         if (data) {
           var response = JSON.parse(data);
           if (response.result == "warning") {
-            title = "Success";
-            swal2({
+            swal({
               title: "Files remain on disk.",
               text: response.message,
-              icon: "warning",
-            }).then(() => {
+              type: "warning"
+            }, function() {
               location.reload();
             });
           } else {
@@ -1145,12 +1140,15 @@ function generateOverride(myID, myProject=null) {
             var form = document.createElement("div");
             form.style["text-align"] = "left";
             form.innerHTML = html;
-            swal2({
+            swal({
               title: "Edit Stack UI Labels",
-              content: form,
-              buttons: true,
-            }).then((result) => {
-              if(result) {
+              text: html,
+              html: true,
+              showCancelButton: true,
+              confirmButtonText: "Save",
+              cancelButtonText: "Cancel"
+            }, function(confirmed) {
+              if(confirmed) {
                 for( var service_key in override_doc.services ) {
                   if( service_key in main_doc.services ) {
                     var new_icon = document.getElementById(`${service_key}_icon`).value;
@@ -1170,10 +1168,10 @@ function generateOverride(myID, myProject=null) {
                 // console.log(rawOverride);
                 $.post(caURL,{action:"saveOverride",script:project,scriptContents:rawOverride},function(data) {
                   if (!data) {
-                    swal2({
+                    swal({
                       title: "Failed to update labels.",
-                      icon: "error",
-                    })
+                      type: "error"
+                    });
                   }
                 });
               }
@@ -1215,10 +1213,10 @@ function generateProfiles(myID, myProject=null) {
         // console.log(rawProfiles);
         $.post(caURL,{action:"saveProfiles",script:project,scriptContents:rawProfiles},function(data) {
           if (!data) {
-            swal2({
+            swal({
               title: "Failed to update profiles.",
-              icon: "error",
-            })
+              type: "error"
+            });
           }
         });
       }
@@ -1311,36 +1309,36 @@ function editStackSettings(myID) {
     if (rawEnvPath) {
       var rawEnvPath = JSON.parse(rawEnvPath);
       if(rawEnvPath.result == 'success') {
-        var form = document.createElement("div");
-        // form.classList.add("swal-content");
-        form.innerHTML =  `<div class="swal-text" style="font-weight: bold; padding-left: 0px; margin-top: 0px;">ENV File Path</div>`;
-        form.innerHTML += `<br>`;
-        form.innerHTML += `<input type='text' id='env_path' class='swal-content__input' pattern="(\/mnt\/.*\/.+)" oninput="this.reportValidity()" title="A path under /mnt/user/ or /mnt/cache/ or /mnt/pool/" placeholder=Default value='${rawEnvPath.content}'>`;
-        swal2({
+        var formHtml = `<div class="swal-text" style="font-weight: bold; padding-left: 0px; margin-top: 0px;">ENV File Path</div>`;
+        formHtml += `<br>`;
+        formHtml += `<input type='text' id='env_path' class='swal-content__input' pattern="(\/mnt\/.*\/.+)" oninput="this.reportValidity()" title="A path under /mnt/user/ or /mnt/cache/ or /mnt/pool/" placeholder=Default value='${rawEnvPath.content}'>`;
+        swal({
           title: "Stack Settings",
-          // text: "Enter in the name for the stack",
-          content: form,
-          buttons: true,
-        }).then((inputValue) => {
-          if (inputValue) {
+          text: formHtml,
+          html: true,
+          showCancelButton: true,
+          confirmButtonText: "Save",
+          closeOnConfirm: false
+        }, function(confirmed) {
+          if (confirmed) {
             var new_env_path = document.getElementById("env_path").value;
             $.post(caURL,{action:'setEnvPath',envPath:new_env_path,script:project},function(data) {
                 var title = "Failed to set stack settings.";
                 var message = "";
-                var icon = "error";
+                var type = "error";
                 if (data) {
                   var response = JSON.parse(data);
                   if (response.result == "success") {
                     title = "Success";
                   }
                   message = response.message;
-                  icon = response.result;
+                  type = response.result;
                 }
-                swal2({
+                swal({
                   title: title,
                   text: message,
-                  icon: icon,
-                }).then(() => {
+                  type: type
+                }, function() {
                   location.reload();
                 });
             });        
@@ -1701,26 +1699,30 @@ function executeStackAction(action) {
 }
 
 function showProfileSelector(action, path, profiles) {
-  var buttonsList = {};
-  buttonsList["default"] = { text: "All Services (Default)" };
-  profiles.forEach(function(profile) {
-    buttonsList[profile] = { text: profile };
-  });
-  buttonsList["Cancel"] = { text: "Cancel", value: null };
-  
   var actionNames = {
     'up': 'Compose Up',
     'down': 'Compose Down',
     'update': 'Update Stack'
   };
   
-  swal2({
+  // Build profile selection HTML
+  var profileHtml = '<div style="text-align: left;">';
+  profileHtml += '<label><input type="radio" name="profile_selection" value="" checked> All Services (Default)</label><br>';
+  profiles.forEach(function(profile) {
+    profileHtml += '<label><input type="radio" name="profile_selection" value="' + profile + '"> ' + profile + '</label><br>';
+  });
+  profileHtml += '</div>';
+  
+  swal({
     title: "Select Profile",
-    text: "Choose which profile to use for " + actionNames[action],
-    buttons: buttonsList,
-  }).then((result) => {
-    if (result && result !== 'Cancel') {
-      var profile = result === 'default' ? '' : result;
+    text: "Choose which profile to use for " + actionNames[action] + "<br><br>" + profileHtml,
+    html: true,
+    showCancelButton: true,
+    confirmButtonText: "Continue",
+    cancelButtonText: "Cancel"
+  }, function(confirmed) {
+    if (confirmed) {
+      var profile = $('input[name="profile_selection"]:checked').val() || '';
       switch(action) {
         case 'up':
           ComposeUp(path, profile);
@@ -2164,10 +2166,10 @@ function saveTab(tabName) {
     }
     return false;
   }).fail(function() {
-    swal2({
+    swal({
       title: "Save Failed",
       text: "Failed to save " + tabName + " file. Please try again.",
-      icon: "error"
+      type: "error"
     });
     return false;
   });
@@ -2204,25 +2206,25 @@ function saveAllChanges() {
     });
     
     if (allSucceeded) {
-      swal2({
+      swal({
         title: "Saved!",
         text: "All changes have been saved.",
-        icon: "success",
+        type: "success",
         timer: 1500,
-        buttons: false
+        showConfirmButton: false
       });
     } else {
-      swal2({
+      swal({
         title: "Partial Save",
         text: "Some items could not be saved. Please check the error messages and try again.",
-        icon: "warning"
+        type: "warning"
       });
     }
   }).fail(function() {
-    swal2({
+    swal({
       title: "Save Failed",
       text: "An error occurred while saving. Please try again.",
-      icon: "error"
+      type: "error"
     });
   });
 }
@@ -2357,10 +2359,10 @@ function saveLabels() {
     }
     return false;
   }).fail(function() {
-    swal2({
+    swal({
       title: "Save Failed",
       text: "Failed to save WebUI labels. Please try again.",
-      icon: "error"
+      type: "error"
     });
     return false;
   });
@@ -2374,14 +2376,15 @@ function saveAllTabs() {
 function closeEditorModal() {
   var totalChanges = editorModal.modifiedTabs.size + editorModal.modifiedSettings.size + editorModal.modifiedLabels.size;
   if (totalChanges > 0) {
-    swal2({
+    swal({
       title: "Unsaved Changes",
       text: "You have unsaved changes. Are you sure you want to close?",
-      icon: "warning",
-      buttons: ["Cancel", "Discard Changes"],
-      dangerMode: true,
-    }).then((willClose) => {
-      if (willClose) {
+      type: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Discard Changes",
+      cancelButtonText: "Cancel"
+    }, function(confirmed) {
+      if (confirmed) {
         doCloseEditorModal();
       }
     });
@@ -2475,25 +2478,26 @@ function editOverrideByProject(project) {
 }
 
 function deleteStackByProject(project, projectName) {
-  var element = document.createElement("div");
-  element.innerHTML = "Are you sure you want to delete <font color='red'><b>"+escapeHtml(projectName)+"</b></font> (<font color='green'>"+escapeHtml(compose_root)+"/"+escapeHtml(project)+"</font>)?"; 
-  swal2({
-    content: element,
+  var msgHtml = "Are you sure you want to delete <font color='red'><b>"+escapeHtml(projectName)+"</b></font> (<font color='green'>"+escapeHtml(compose_root)+"/"+escapeHtml(project)+"</font>)?"; 
+  swal({
     title: "Delete Stack?",
-    icon: "warning",
-    buttons: true,
-    dangerMode: true,
-  }).then((willDelete) => {
-    if (willDelete) {
+    text: msgHtml,
+    html: true,
+    type: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Delete",
+    cancelButtonText: "Cancel"
+  }, function(confirmed) {
+    if (confirmed) {
       $.post(caURL,{action:'deleteStack',stackName:project},function(data) {
         if (data) {
           var response = JSON.parse(data);
           if (response.result == "warning") {
-            swal2({
+            swal({
               title: "Files remain on disk.",
               text: response.message,
-              icon: "warning",
-            }).then(() => {
+              type: "warning"
+            }, function() {
               location.reload();
             });
           } else {
@@ -2762,7 +2766,7 @@ function addComposeContainerContext(elementId) {
       if (typeof openTerminal === 'function') {
         openTerminal('docker', containerName, '/bin/bash');
       } else {
-        swal2({title: 'Console', text: 'Terminal not available', icon: 'info'});
+        swal({title: 'Console', text: 'Terminal not available', type: 'info'});
       }
     }});
     opts.push({divider: true});
@@ -2802,7 +2806,7 @@ function addComposeContainerContext(elementId) {
     if (typeof openTerminal === 'function') {
       openTerminal('docker', containerName, '.log');
     } else {
-      swal2({title: 'Logs', text: 'Terminal not available', icon: 'info'});
+      swal({title: 'Logs', text: 'Terminal not available', type: 'info'});
     }
   }});
   
@@ -2829,20 +2833,20 @@ function containerAction(containerName, action, stackId) {
       } else {
         // Restore icon
         if ($icon.is('i')) $icon.removeClass().addClass(originalClass);
-        swal2({
+        swal({
           title: 'Action Failed',
           text: escapeHtml(response.message) || 'Failed to ' + action + ' container',
-          icon: 'error'
+          type: 'error'
         });
       }
     }
   }).fail(function() {
     // Restore icon
     if ($icon.is('i')) $icon.removeClass().addClass(originalClass);
-    swal2({
+    swal({
       title: 'Action Failed',
       text: 'Failed to ' + action + ' container',
-      icon: 'error'
+      type: 'error'
     });
   });
 }
