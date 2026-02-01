@@ -737,64 +737,62 @@ $(function() {
 });
 
 function addStack() {
-  var formHtml = `<input type="text" id="stack_name" class="swal-content__input" placeholder="stack_name">
-                    <br>
-                    <details>
-                      <summary style="text-align: left">Advanced</summary>
-                      <br>
-                      <div class="swal-text">Stack Directory</div>
-                      <input type="text" id="stack_path" class="swal-content__input" pattern="\/mnt\/.*\/.*" oninput="this.reportValidity()" title="A path under /mnt/user/ or /mnt/cache/ or /mnt/pool/" style="margin-top: 20px" placeholder="default">
-                      <div style="display:none;">
-                        <div class="swal-text">Pull From Github</div>
-                        <input type="url" id="git_url" class="swal-content__input" style="margin-top: 20px" placeholder="https://github.com/example/repo.git">
-                      </div>
-                    </details>`;
   swal({
     title: "Add New Compose Stack",
-    text: formHtml,
-    html: true,
+    text: "Enter a name for your new stack:",
+    type: "input",
+    inputPlaceholder: "Stack Name",
     showCancelButton: true,
-    confirmButtonText: "OK",
-    closeOnConfirm: false
-  }, function(confirmed) {
-    if (confirmed) {
-      var new_stack_name = document.getElementById("stack_name").value;
-      var new_stack_dir = document.getElementById("stack_path").value;
-      var git_url = document.getElementById("git_url").value;
-      if (!new_stack_name) {
-        swal({
-          title: "Failed to create stack.",
-          text: "Stack name unspecified.",
-          type: "error"
-        });
-      }
-      else {
-        $.post(
-          caURL,
-          {action:'addStack',stackName:new_stack_name,stackPath:new_stack_dir},
-          function(data) {
-            var title = "Failed to create stack.";
-            var message = "";
-            var type = "error";
-            if (data) {
-              var response = JSON.parse(data);
-              if (response.result == "success") {
-                title = "Success";
-              }
-              message = response.message;
-              type = response.result;
-            }
-            swal({
-              title: title,
-              text: message,
-              type: type
-            }, function() {
-              location.reload();
-            });
-          }
-        );        
+    closeOnConfirm: false,
+    inputValidator: function(value) {
+      if (!value || !value.trim()) {
+        return "Please enter a stack name";
       }
     }
+  }, function(inputValue) {
+    if (inputValue === false) return; // User cancelled
+    
+    var new_stack_name = inputValue.trim();
+    if (!new_stack_name) {
+      swal.showInputError("Please enter a stack name");
+      return false;
+    }
+    
+    $.post(
+      caURL,
+      {action:'addStack', stackName:new_stack_name},
+      function(data) {
+        if (data) {
+          var response = JSON.parse(data);
+          if (response.result == "success") {
+            // Close the swal dialog and open editor
+            swal.close();
+            // Open the editor modal for the newly created stack
+            openEditorModalByProject(response.project, response.projectName);
+            // Refresh the list in the background
+            loadlist();
+          } else {
+            swal({
+              title: "Failed to create stack",
+              text: response.message || "An error occurred",
+              type: "error"
+            });
+          }
+        } else {
+          swal({
+            title: "Failed to create stack",
+            text: "No response from server",
+            type: "error"
+          });
+        }
+      }
+    ).fail(function() {
+      swal({
+        title: "Failed to create stack",
+        text: "Request failed",
+        type: "error"
+      });
+    });
   });
 }
 

@@ -107,7 +107,9 @@ switch ($_POST['action']) {
 
         file_put_contents("$folder/name",$stackName);
 
-        echo json_encode( [ 'result' => 'success', 'message' => '' ] );
+        // Return the folder name (without path) so frontend can open the editor
+        $createdFolderName = basename($folder);
+        echo json_encode( [ 'result' => 'success', 'message' => '', 'project' => $createdFolderName, 'projectName' => $stackName ] );
         break;
     case 'deleteStack':
         $stackName = isset($_POST['stackName']) ? urldecode(($_POST['stackName'])) : "";
