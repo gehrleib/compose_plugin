@@ -31,18 +31,18 @@ const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 var autoCheckUpdates = <?php echo json_encode($autoCheckUpdates); ?>;
 var autoCheckDays = <?php echo json_encode($autoCheckDays); ?>;
 
-// Timers for async operations (like Docker tab)
-var timers = {};
+// Timers for async operations (plugin-specific to avoid collision with Unraid's global timers)
+var composeTimers = {};
 
 // Load stack list asynchronously (like Docker tab's loadlist)
 function loadlist() {
   // Show spinner after short delay to avoid flash on fast loads
-  timers.compose = setTimeout(function(){
+  composeTimers.load = setTimeout(function(){
     $('div.spinner.fixed').show('slow');
   }, 500);
   
   $.get('/plugins/compose.manager/php/compose_list.php', function(data) {
-    clearTimeout(timers.compose);
+    clearTimeout(composeTimers.load);
     
     // Insert the loaded content
     $('#compose_list').html(data);
@@ -55,8 +55,8 @@ function loadlist() {
     
     // Show buttons now that content is loaded
     $('input[type=button]').show();
-  }).fail(function() {
-    clearTimeout(timers.compose);
+  }).fail(function(xhr, status, error) {
+    clearTimeout(composeTimers.load);
     $('div.spinner.fixed').hide('slow');
     $('#compose_list').html('<tr><td colspan="8" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
   });

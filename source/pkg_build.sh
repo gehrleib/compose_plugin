@@ -50,6 +50,7 @@ unzip v${ACE_VERSION}.zip "ace-builds-${ACE_VERSION}/src-min-noconflict/*" -d "/
 cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/!(mode-*|theme-*) $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
 cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*yaml.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
 cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*text.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
+cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/mode-sh.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
 
 cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*tomorrow.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
 cp /tmp/ace/ace-builds-${ACE_VERSION}/src-min-noconflict/*tomorrow_night.js $tmpdir/usr/local/emhttp/plugins/compose.manager/javascript/ace/
