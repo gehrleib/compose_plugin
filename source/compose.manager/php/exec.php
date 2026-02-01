@@ -9,6 +9,25 @@ function getElement($element) {
     return $return;
 }
 
+/**
+ * Normalize Docker image name for update checking.
+ * Strips the docker.io/ prefix (docker compose adds this for Docker Hub images)
+ * and @sha256: digest suffix, then uses Unraid's DockerUtil::ensureImageTag
+ * for consistent normalization matching how Unraid stores update status.
+ */
+function normalizeImageForUpdateCheck($image) {
+    // Strip docker.io/ prefix (docker compose adds this for Docker Hub images)
+    if (strpos($image, 'docker.io/') === 0) {
+        $image = substr($image, 10); // Remove 'docker.io/'
+    }
+    // Strip @sha256: digest suffix if present (image pinning)
+    if (($digestPos = strpos($image, '@sha256:')) !== false) {
+        $image = substr($image, 0, $digestPos);
+    }
+    // Use Unraid's normalization for consistent key format (adds library/ prefix for official images, ensures tag)
+    return DockerUtil::ensureImageTag($image);
+}
+
 switch ($_POST['action']) {
     case 'addStack':
         #Create indirect
@@ -190,6 +209,36 @@ switch ($_POST['action']) {
         break;
     case 'unPatchUI':
         exec("$plugin_root/scripts/patch_ui.sh -r");
+        break;
+    case 'clearUpdateCache':
+        // Clear the compose manager update status cache
+        $composeUpdateStatusFile = "/boot/config/plugins/compose.manager/update-status.json";
+        if (is_file($composeUpdateStatusFile)) {
+            unlink($composeUpdateStatusFile);
+        }
+        // Also clear entries from Unraid's update status that were created by compose manager
+        // by removing entries that don't correspond to running Docker containers
+        $unraidUpdateStatusFile = "/var/lib/docker/unraid-update-status.json";
+        if (is_file($unraidUpdateStatusFile)) {
+            require_once("/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php");
+            $DockerClient = new DockerClient();
+            $runningImages = [];
+            foreach ($DockerClient->getDockerContainers() as $ct) {
+                $img = $ct['Image'] ?? '';
+                if ($img) {
+                    $runningImages[DockerUtil::ensureImageTag($img)] = true;
+                }
+            }
+            $updateStatus = DockerUtil::loadJSON($unraidUpdateStatusFile);
+            $cleaned = [];
+            foreach ($updateStatus as $key => $value) {
+                if (isset($runningImages[$key])) {
+                    $cleaned[$key] = $value;
+                }
+            }
+            DockerUtil::saveJSON($unraidUpdateStatusFile, $cleaned);
+        }
+        echo json_encode(['result' => 'success', 'message' => 'Update cache cleared']);
         break;
     case 'setEnvPath':
         $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
@@ -483,22 +532,16 @@ switch ($_POST['action']) {
                         $image = $container['Image'] ?? '';
                         
                         if ($containerName && $image) {
-                            // Ensure image has a tag
-                            if (strpos($image, ':') === false) {
-                                $image .= ':latest';
-                            }
+                            // Normalize image name (strip docker.io/ prefix, @sha256: digest, add library/ for official images)
+                            $image = normalizeImageForUpdateCheck($image);
                             
                             // Clear cached local SHA to force re-inspection of the actual image
                             // This is needed because Unraid's reloadUpdateStatus uses cached values
                             // which can be stale after docker compose pull
                             $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
-                            $imageLookupKey = $image;
-                            if (!isset($updateStatusData[$image]) && strpos($image, '/') === false) {
-                                $imageLookupKey = 'library/' . $image;
-                            }
-                            if (isset($updateStatusData[$imageLookupKey])) {
+                            if (isset($updateStatusData[$image])) {
                                 // Clear the local SHA to force fresh inspection
-                                $updateStatusData[$imageLookupKey]['local'] = null;
+                                $updateStatusData[$image]['local'] = null;
                                 DockerUtil::saveJSON($dockerManPaths['update-status'], $updateStatusData);
                             }
                             
@@ -511,17 +554,9 @@ switch ($_POST['action']) {
                             $localSha = '';
                             $remoteSha = '';
                             
-                            // Try to find the image in the status file
-                            // Docker Hub official images are stored with library/ prefix
-                            $imageLookupKey = $image;
-                            if (!isset($updateStatusData[$image]) && strpos($image, '/') === false) {
-                                // Try with library/ prefix for Docker Hub official images
-                                $imageLookupKey = 'library/' . $image;
-                            }
-                            
-                            if (isset($updateStatusData[$imageLookupKey])) {
-                                $localSha = $updateStatusData[$imageLookupKey]['local'] ?? '';
-                                $remoteSha = $updateStatusData[$imageLookupKey]['remote'] ?? '';
+                            if (isset($updateStatusData[$image])) {
+                                $localSha = $updateStatusData[$image]['local'] ?? '';
+                                $remoteSha = $updateStatusData[$image]['remote'] ?? '';
                                 // Shorten SHA for display (first 12 chars after sha256:)
                                 if ($localSha && strpos($localSha, 'sha256:') === 0) {
                                     $localSha = substr($localSha, 7, 12);
@@ -638,21 +673,16 @@ switch ($_POST['action']) {
                             
                             // Only check updates for running containers
                             if ($containerName && $image && $state === 'running') {
-                                if (strpos($image, ':') === false) {
-                                    $image .= ':latest';
-                                }
+                                // Normalize image name (strip docker.io/ prefix, @sha256: digest, add library/ for official images)
+                                $image = normalizeImageForUpdateCheck($image);
                                 
                                 // Clear cached local SHA to force re-inspection of the actual image
                                 // This is needed because Unraid's reloadUpdateStatus uses cached values
                                 // which can be stale after docker compose pull
                                 $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
-                                $imageLookupKey = $image;
-                                if (!isset($updateStatusData[$image]) && strpos($image, '/') === false) {
-                                    $imageLookupKey = 'library/' . $image;
-                                }
-                                if (isset($updateStatusData[$imageLookupKey])) {
+                                if (isset($updateStatusData[$image])) {
                                     // Clear the local SHA to force fresh inspection
-                                    $updateStatusData[$imageLookupKey]['local'] = null;
+                                    $updateStatusData[$image]['local'] = null;
                                     DockerUtil::saveJSON($dockerManPaths['update-status'], $updateStatusData);
                                 }
                                 
@@ -664,17 +694,9 @@ switch ($_POST['action']) {
                                 $localSha = '';
                                 $remoteSha = '';
                                 
-                                // Try to find the image in the status file
-                                // Docker Hub official images are stored with library/ prefix
-                                $imageLookupKey = $image;
-                                if (!isset($updateStatusData[$image]) && strpos($image, '/') === false) {
-                                    // Try with library/ prefix for Docker Hub official images
-                                    $imageLookupKey = 'library/' . $image;
-                                }
-                                
-                                if (isset($updateStatusData[$imageLookupKey])) {
-                                    $localSha = $updateStatusData[$imageLookupKey]['local'] ?? '';
-                                    $remoteSha = $updateStatusData[$imageLookupKey]['remote'] ?? '';
+                                if (isset($updateStatusData[$image])) {
+                                    $localSha = $updateStatusData[$image]['local'] ?? '';
+                                    $remoteSha = $updateStatusData[$image]['remote'] ?? '';
                                     // Shorten SHA for display (first 12 chars after sha256:)
                                     if ($localSha && strpos($localSha, 'sha256:') === 0) {
                                         $localSha = substr($localSha, 7, 12);

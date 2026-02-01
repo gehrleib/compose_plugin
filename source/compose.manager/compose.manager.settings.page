@@ -39,6 +39,25 @@ function unpatchWebui() {
   })
 }
 
+function clearUpdateCache() {
+  swal({
+    title: 'Clear Update Cache',
+    text: 'This will clear the update status cache and remove stale entries. You will need to check for updates again.',
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Clear Cache'
+  }, function() {
+    $.post(caURL, {action: 'clearUpdateCache'}, function(data) {
+      var result = JSON.parse(data);
+      if (result.result === 'success') {
+        swal('Success', 'Update cache has been cleared.', 'success');
+      } else {
+        swal('Error', result.message || 'Failed to clear cache', 'error');
+      }
+    });
+  });
+}
+
 function checkProjectFolder() {
   var projects_folder_not_empty = <?php echo json_encode($projects_exist); ?>;
   var original_folder = "<?php echo $cfg['PROJECTS_FOLDER'] ?>";
@@ -150,6 +169,15 @@ _(Auto Check Interval (days))_:
   Minimum: 0.04 days (about 1 hour). Maximum: 30 days.
 </blockquote>
 </div>
+
+_(Clear Update Cache)_:
+: <input type="button" value="_(Clear Cache)_" onclick="clearUpdateCache()">
+
+<blockquote class="inline_help" style="display: none;">
+  Clears the cached update status for all compose containers.<br>
+  Use this if update checks are showing incorrect results or if you want to force a fresh check.<br>
+  After clearing, use "Check for Updates" on the Compose page to recheck all containers.
+</blockquote>
 
 _(Patch unRAID WebUI)_:
 : <select name="PATCH_UI">
