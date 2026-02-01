@@ -1688,21 +1688,8 @@ function executeStackAction(action) {
     case 'logs':
       ComposeLogs(project);
       break;
-    case 'editFiles':
+    case 'edit':
       openEditorModalByProject(project, projectName);
-      break;
-    case 'editName':
-      showEditNameDialog(currentStackId, project, projectName);
-      break;
-    case 'editDesc':
-      showEditDescDialog(currentStackId, project);
-      break;
-    case 'uiLabels':
-      // Open modal on Labels tab
-      openEditorModalByProject(project, projectName, 'labels');
-      break;
-    case 'settings':
-      editStackSettingsByProject(project);
       break;
     case 'delete':
       if (!isUp) {
@@ -2484,59 +2471,6 @@ function editOverrideByProject(project) {
       editor.setValue(response.content || "# Override file\n", -1);
     }
   });
-}
-
-function showEditNameDialog(stackId, project, currentName) {
-  swal2({
-    title: 'Edit Stack Name',
-    input: 'text',
-    inputValue: currentName,
-    inputPlaceholder: 'Enter new name',
-    showCancelButton: true,
-    confirmButtonText: 'Save',
-    cancelButtonText: 'Cancel',
-    inputValidator: (value) => {
-      if (!value || !value.trim()) {
-        return 'Name cannot be empty';
-      }
-    }
-  }).then((result) => {
-    if (result.value) {
-      $.post(caURL, {action:'changeName', script:project, newName:result.value}, function(data) {
-        window.location.reload();
-      });
-    }
-  });
-}
-
-function showEditDescDialog(stackId, project) {
-  var currentDesc = $('#desc' + stackId).html().replace(/<br>/g, '\n');
-  
-  swal2({
-    title: 'Edit Description',
-    input: 'textarea',
-    inputValue: currentDesc,
-    inputPlaceholder: 'Enter description',
-    showCancelButton: true,
-    confirmButtonText: 'Save',
-    cancelButtonText: 'Cancel'
-  }).then((result) => {
-    if (result.value !== undefined) {
-      var newDesc = result.value.replace(/\n/g, '<br>');
-      $.post(caURL, {action:'changeDesc', script:project, newDesc:newDesc}, function(data) {
-        $('#desc' + stackId).html(newDesc || 'No description');
-      });
-    }
-  });
-}
-
-function editStackSettingsByProject(project) {
-  // Find the project name from the row
-  var $row = $('[data-project="' + project + '"]').filter('tr.sortable');
-  var projectName = $row.data('projectname') || project;
-  
-  // Open modal on Settings tab
-  openEditorModalByProject(project, projectName, 'settings');
 }
 
 function deleteStackByProject(project, projectName) {
