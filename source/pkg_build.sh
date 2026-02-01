@@ -3,8 +3,9 @@
 [ -z "$COMPOSE_VERSION" ] && echo "Compose Version not set" && exit 2
 [ -z "$COMPOSE_SWITCH_VERSION" ] && echo "Compose Switch Version not set" && exit 3
 [ -z "$ACE_VERSION" ] && echo "ACE Version not set" && exit 4
+[ -z "$PKG_VERSION" ] && echo "Package Version not set" && exit 5
 tmpdir=/tmp/tmp.$(( $RANDOM * 19318203981230 + 40 ))
-version=$(date +"%Y.%m.%d")$1
+version=$PKG_VERSION
 
 shopt -s extglob
 
