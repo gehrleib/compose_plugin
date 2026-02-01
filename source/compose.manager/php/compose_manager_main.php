@@ -3148,6 +3148,7 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
     <span style='vertical-align:middle;'>Autostart only</span>
   </label>
 </span>
+<a href='/Settings/compose.manager.settings' style='margin-left:20px;'><input type='button' value='Settings'></a>
 </span><br>
 
 <!-- Stack Actions Modal -->
