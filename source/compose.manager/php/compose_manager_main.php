@@ -261,12 +261,10 @@ foreach ($composeProjects as $project) {
   $o .= "</span></span>";
   $o .= "</td>";
   
-  // Update column (like Docker tab)
+  // Update column (like Docker tab) - default to "not checked" until update check runs
   $o .= "<td class='updatecolumn'>";
   if ($isrunning) {
-    $o .= "<a class='exec' style='cursor:pointer;' onclick=\"showUpdateWarning('$projectHtml', '$id');\" title='Check for updates'>";
-    $o .= "<span style='white-space:nowrap;'><i class='fa fa-cloud-download fa-fw'></i> pull updates</span>";
-    $o .= "</a>";
+    $o .= "<span class='grey-text' style='white-space:nowrap;cursor:default;' title='Click Check for Updates to check'><i class='fa fa-question-circle fa-fw'></i> not checked</span>";
   } else {
     $o .= "<span class='grey-text' style='white-space:nowrap;'><i class='fa fa-docker fa-fw'></i> stopped</span>";
   }
@@ -511,6 +509,28 @@ function escapeAttr(text) {
 // Update status cache per stack
 var stackUpdateStatus = {};
 
+// Load saved update status from server (called on page load)
+function loadSavedUpdateStatus() {
+  $.post(caURL, {action: 'getSavedUpdateStatus'}, function(data) {
+    if (data) {
+      try {
+        var response = JSON.parse(data);
+        if (response.result === 'success' && response.stacks) {
+          stackUpdateStatus = response.stacks;
+          
+          // Update the UI for each stack with saved status
+          for (var stackName in response.stacks) {
+            var stackInfo = response.stacks[stackName];
+            updateStackUpdateUI(stackName, stackInfo);
+          }
+        }
+      } catch(e) {
+        console.error('Failed to load saved update status:', e);
+      }
+    }
+  });
+}
+
 // Check for updates for all stacks
 function checkAllUpdates() {
   $('#checkUpdatesBtn').prop('disabled', true).val('Checking...');
@@ -543,9 +563,13 @@ function checkAllUpdates() {
     $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
   }).fail(function() {
     $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
-    // Reset update columns
-    $('.updatecolumn a').each(function() {
-      $(this).html('<i class="fa fa-cloud-download"></i> pull updates');
+    // Reset update columns to not checked state
+    $('.updatecolumn').each(function() {
+      var $cell = $(this);
+      if (!$cell.find('.grey-text').length || $cell.find('.fa-docker').length === 0) {
+        // Only reset running stacks (not the "stopped" ones)
+        $cell.html('<span class="grey-text" style="white-space:nowrap;cursor:default;"><i class="fa fa-exclamation-circle fa-fw"></i> check failed</span>');
+      }
     });
   });
 }
@@ -719,6 +743,9 @@ $(function() {
   
   // Apply initial view state
   applyListView();
+  
+  // Load saved update status on page load
+  loadSavedUpdateStatus();
 });
 
 function addStack() {

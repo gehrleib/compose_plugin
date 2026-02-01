@@ -516,6 +516,20 @@ switch ($_POST['action']) {
         }
         
         echo json_encode([ 'result' => 'success', 'updates' => $updateResults, 'projectName' => $projectName ]);
+        
+        // Save the update status for this stack
+        $composeUpdateStatusFile = "/boot/config/plugins/compose.manager/update-status.json";
+        $savedStatus = [];
+        if (is_file($composeUpdateStatusFile)) {
+            $savedStatus = json_decode(file_get_contents($composeUpdateStatusFile), true) ?: [];
+        }
+        $savedStatus[$script] = [
+            'projectName' => $projectName,
+            'hasUpdate' => count(array_filter($updateResults, function($r) { return $r['hasUpdate']; })) > 0,
+            'containers' => $updateResults,
+            'lastChecked' => time()
+        ];
+        file_put_contents($composeUpdateStatusFile, json_encode($savedStatus, JSON_PRETTY_PRINT));
         break;
     case 'checkAllStacksUpdates':
         // Check for updates for all compose stacks
@@ -629,7 +643,29 @@ switch ($_POST['action']) {
             ];
         }
         
+        // Save the update status for all stacks
+        $composeUpdateStatusFile = "/boot/config/plugins/compose.manager/update-status.json";
+        $savedStatus = $allUpdates;
+        foreach ($savedStatus as $stackKey => &$stackData) {
+            $stackData['lastChecked'] = time();
+        }
+        file_put_contents($composeUpdateStatusFile, json_encode($savedStatus, JSON_PRETTY_PRINT));
+        
         echo json_encode([ 'result' => 'success', 'stacks' => $allUpdates ]);
+        break;
+    case 'getSavedUpdateStatus':
+        // Load saved update status from file
+        $composeUpdateStatusFile = "/boot/config/plugins/compose.manager/update-status.json";
+        if (is_file($composeUpdateStatusFile)) {
+            $savedStatus = json_decode(file_get_contents($composeUpdateStatusFile), true);
+            if ($savedStatus) {
+                echo json_encode([ 'result' => 'success', 'stacks' => $savedStatus ]);
+            } else {
+                echo json_encode([ 'result' => 'success', 'stacks' => [] ]);
+            }
+        } else {
+            echo json_encode([ 'result' => 'success', 'stacks' => [] ]);
+        }
         break;
 }
 
