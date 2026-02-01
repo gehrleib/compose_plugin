@@ -164,7 +164,7 @@ Write-Host "GitHub Actions will now:" -ForegroundColor Cyan
 Write-Host "  1. Build the TXZ package" -ForegroundColor Gray
 Write-Host "  2. Calculate MD5 hash" -ForegroundColor Gray
 Write-Host "  3. Create GitHub Release" -ForegroundColor Gray
-Write-Host "  4. Update PLG in dev branch" -ForegroundColor Gray
+Write-Host "  4. Update PLG in main branch" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Monitor progress at:" -ForegroundColor Cyan
 Write-Host "  https://github.com/$GitHubRepo/actions" -ForegroundColor Blue
