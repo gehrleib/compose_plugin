@@ -592,8 +592,30 @@ function updateStackUpdateUI(stackName, stackInfo) {
   
   // Update the stack row's update column (match Docker tab style)
   if (updateCount > 0) {
-    // Updates available - orange "update ready" style with clickable link
-    $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span class="orange-text" style="white-space:nowrap;"><i class="fa fa-flash fa-fw"></i> ' + updateCount + ' update' + (updateCount > 1 ? 's' : '') + '</span></a>');
+    // Updates available - orange "update ready" style with clickable link and SHA info
+    var updateHtml = '<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');">';
+    updateHtml += '<span class="orange-text" style="white-space:nowrap;"><i class="fa fa-flash fa-fw"></i> ' + updateCount + ' update' + (updateCount > 1 ? 's' : '') + '</span>';
+    updateHtml += '</a>';
+    
+    // Show first container's SHA diff if only one update, or indicate multiple
+    if (stackInfo.containers) {
+      var updatesWithSha = stackInfo.containers.filter(function(ct) { 
+        return ct.hasUpdate && ct.localSha && ct.remoteSha; 
+      });
+      if (updatesWithSha.length === 1) {
+        // Single update - show the SHA diff inline
+        var ct = updatesWithSha[0];
+        updateHtml += '<div style="font-family:monospace;font-size:0.8em;margin-top:2px;">';
+        updateHtml += '<span style="color:#f80;">' + escapeHtml(ct.localSha) + '</span>';
+        updateHtml += ' <i class="fa fa-arrow-right" style="margin:0 2px;color:#3c3;font-size:0.9em;"></i> ';
+        updateHtml += '<span style="color:#3c3;">' + escapeHtml(ct.remoteSha) + '</span>';
+        updateHtml += '</div>';
+      } else if (updatesWithSha.length > 1) {
+        // Multiple updates - show expand hint
+        updateHtml += '<div class="advanced" style="font-size:0.8em;color:#999;margin-top:2px;">Expand for details</div>';
+      }
+    }
+    $updateCell.html(updateHtml);
   } else if (totalContainers > 0) {
     // No updates - green "up-to-date" style (like Docker tab)
     // Basic view: just shows up-to-date
@@ -1263,6 +1285,24 @@ function UpdateStack(path, profile="") {
   showStackActionDialog('update', path, profile);
 }
 
+// Helper to merge update status into containers array
+function mergeUpdateStatus(containers, project) {
+  if (!containers || !stackUpdateStatus[project] || !stackUpdateStatus[project].containers) {
+    return containers;
+  }
+  containers.forEach(function(container) {
+    stackUpdateStatus[project].containers.forEach(function(update) {
+      if (container.Name === update.container) {
+        container.hasUpdate = update.hasUpdate;
+        container.updateStatus = update.status;
+        container.localSha = update.localSha || '';
+        container.remoteSha = update.remoteSha || '';
+      }
+    });
+  });
+  return containers;
+}
+
 // Unified stack action dialog - handles up, down, and update actions
 function showStackActionDialog(action, path, profile) {
   var stackName = basename(path);
@@ -1277,7 +1317,9 @@ function showStackActionDialog(action, path, profile) {
   
   // Check if we have cached container data
   if (stackId && stackContainersCache[stackId] && stackContainersCache[stackId].length > 0) {
-    renderStackActionDialog(action, stackName, path, profile, stackContainersCache[stackId]);
+    // Merge update status into cached data before rendering
+    var containers = mergeUpdateStatus(stackContainersCache[stackId], project);
+    renderStackActionDialog(action, stackName, path, profile, containers);
   } else {
     // Fetch container details first
     $.post(caURL, {action: 'getStackContainers', script: project}, function(data) {
@@ -1293,6 +1335,8 @@ function showStackActionDialog(action, path, profile) {
           }
         } catch(e) {}
       }
+      // Merge update status into freshly fetched data
+      containers = mergeUpdateStatus(containers, project);
       renderStackActionDialog(action, stackName, path, profile, containers);
     }).fail(function() {
       renderStackActionDialog(action, stackName, path, profile, []);
@@ -2220,10 +2264,13 @@ function renderContainerDetails(stackId, containers, project) {
     var ctRemoteSha = container.remoteSha || '';
     
     if (ctHasUpdate) {
-      // Update available - orange "update ready" style
+      // Update available - orange "update ready" style with SHA diff
+      html += '<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(project) + '\', \'' + escapeAttr(stackId) + '\');">';
       html += '<span class="orange-text" style="white-space:nowrap;"><i class="fa fa-flash fa-fw"></i> update ready</span>';
+      html += '</a>';
       if (ctLocalSha && ctRemoteSha) {
-        html += '<div class="advanced" style="font-family:monospace;font-size:0.85em;">';
+        // Always show SHA diff (not just in advanced view)
+        html += '<div style="font-family:monospace;font-size:0.85em;margin-top:2px;">';
         html += '<span style="color:#f80;">' + escapeHtml(ctLocalSha) + '</span>';
         html += ' <i class="fa fa-arrow-right" style="margin:0 4px;color:#3c3;"></i> ';
         html += '<span style="color:#3c3;">' + escapeHtml(ctRemoteSha) + '</span>';
@@ -2233,11 +2280,12 @@ function renderContainerDetails(stackId, containers, project) {
       // No update - green "up-to-date" style
       html += '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
       if (ctLocalSha) {
+        // Show SHA in advanced view only for up-to-date containers
         html += '<div class="advanced" style="font-family:monospace;font-size:0.85em;color:#666;">' + escapeHtml(ctLocalSha) + '</div>';
       }
     } else {
-      // Unknown/not checked - show "Compose" indicator
-      html += '<span style="white-space:nowrap;color:#888;"><i class="fa fa-docker fa-fw"></i> not checked</span>';
+      // Unknown/not checked
+      html += '<span style="white-space:nowrap;color:#888;"><i class="fa fa-question-circle fa-fw"></i> not checked</span>';
     }
     html += '</td>';
     
