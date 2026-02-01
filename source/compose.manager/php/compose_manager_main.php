@@ -34,8 +34,8 @@ var autoCheckDays = <?php echo json_encode($autoCheckDays); ?>;
 // Timers for async operations (plugin-specific to avoid collision with Unraid's global timers)
 var composeTimers = {};
 
-// Load stack list asynchronously (like Docker tab's loadlist)
-function loadlist() {
+// Load stack list asynchronously (namespaced to avoid conflict with Docker tab's loadlist)
+function composeLoadlist() {
   // Show spinner after short delay to avoid flash on fast loads
   composeTimers.load = setTimeout(function(){
     $('div.spinner.fixed').show('slow');
@@ -733,7 +733,7 @@ $(function() {
   
   // Load the stack list asynchronously (like Docker tab)
   // This defers the expensive docker commands to after the page renders
-  loadlist();
+  composeLoadlist();
 });
 
 function addStack() {
@@ -770,7 +770,7 @@ function addStack() {
             // Open the editor modal for the newly created stack
             openEditorModalByProject(response.project, response.projectName);
             // Refresh the list in the background
-            loadlist();
+            composeLoadlist();
           } else {
             swal({
               title: "Failed to create stack",
