@@ -395,6 +395,9 @@ function loadSavedUpdateStatus() {
             updateStackUpdateUI(stackName, stackInfo);
           }
           
+          // Enable/disable Update All button based on saved status
+          updateUpdateAllButton();
+          
           // Check if auto-check should run based on interval
           if (autoCheckUpdates) {
             checkAutoUpdateIfNeeded(response.stacks);
@@ -448,6 +451,7 @@ function checkAutoUpdateIfNeeded(stacks) {
 // Check for updates for all stacks
 function checkAllUpdates() {
   $('#checkUpdatesBtn').prop('disabled', true).val('Checking...');
+  $('#updateAllBtn').prop('disabled', true);
   
   // Show checking indicator only on running stack update columns (not stopped ones)
   $('tr.sortable').each(function() {
@@ -472,6 +476,9 @@ function checkAllUpdates() {
             var stackInfo = response.stacks[stackName];
             updateStackUpdateUI(stackName, stackInfo);
           }
+          
+          // Enable/disable Update All button based on available updates
+          updateUpdateAllButton();
         }
       } catch(e) {
         console.error('Failed to parse update check response:', e);
@@ -480,6 +487,7 @@ function checkAllUpdates() {
     $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
   }).fail(function() {
     $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
+    $('#updateAllBtn').prop('disabled', true);
     // Reset update columns to not checked state - scope to compose_stacks
     $('#compose_stacks .updatecolumn').each(function() {
       var $cell = $(this);
@@ -488,6 +496,88 @@ function checkAllUpdates() {
         $cell.html('<span class="grey-text" style="white-space:nowrap;cursor:default;"><i class="fa fa-exclamation-circle fa-fw"></i> check failed</span>');
       }
     });
+  });
+}
+
+// Check how many stacks have updates and enable/disable the Update All button
+function updateUpdateAllButton() {
+  var stacksWithUpdates = 0;
+  for (var stackName in stackUpdateStatus) {
+    var stackInfo = stackUpdateStatus[stackName];
+    if (stackInfo.hasUpdate && stackInfo.isRunning) {
+      stacksWithUpdates++;
+    }
+  }
+  $('#updateAllBtn').prop('disabled', stacksWithUpdates === 0);
+}
+
+// Update All Stacks - updates all stacks that have pending updates
+function updateAllStacks() {
+  var autostartOnly = $('#autostartOnlyToggle').is(':checked');
+  var stacks = [];
+  
+  // Collect all stacks with updates
+  for (var stackName in stackUpdateStatus) {
+    var stackInfo = stackUpdateStatus[stackName];
+    if (stackInfo.hasUpdate && stackInfo.isRunning) {
+      var $stackRow = $('[data-project="' + stackName + '"]').filter('tr.sortable');
+      if ($stackRow.length === 0) continue;
+      
+      var autostart = $stackRow.find('.autostart').is(':checked');
+      
+      // Skip if autostart only mode and autostart is not enabled
+      if (autostartOnly && !autostart) continue;
+      
+      var path = $stackRow.data('path');
+      var projectName = $stackRow.data('projectname');
+      
+      stacks.push({
+        project: stackName,
+        projectName: projectName,
+        path: path
+      });
+    }
+  }
+  
+  if (stacks.length === 0) {
+    swal({
+      title: 'No Updates Available',
+      text: autostartOnly ? 'No stacks with Autostart enabled have updates available.' : 'No stacks have updates available.',
+      type: 'info'
+    });
+    return;
+  }
+  
+  var stackNames = stacks.map(function(s) { return escapeHtml(s.projectName); }).join('<br>');
+  var title = autostartOnly ? 'Update Autostart Stacks?' : 'Update All Stacks?';
+  var confirmText = 'Yes, update ' + stacks.length + ' stack' + (stacks.length > 1 ? 's' : '');
+  
+  swal({
+    title: title,
+    html: true,
+    text: '<div style="text-align:left;max-width:400px;margin:0 auto;"><p>The following stacks will be updated:</p><div style="background:rgba(0,0,0,0.2);padding:10px;border-radius:4px;max-height:200px;overflow-y:auto;margin:10px 0;">' + stackNames + '</div><p style="color:#f80;"><i class="fa fa-warning"></i> This will pull new images and recreate containers.</p></div>',
+    type: 'warning',
+    showCancelButton: true,
+    confirmButtonText: confirmText,
+    cancelButtonText: 'Cancel'
+  }, function(confirmed) {
+    if (confirmed) {
+      executeUpdateAllStacks(stacks);
+    }
+  });
+}
+
+function executeUpdateAllStacks(stacks) {
+  var height = 800;
+  var width = 1200;
+  
+  // Create a list of paths to update
+  var paths = stacks.map(function(s) { return s.path; });
+  
+  $.post(compURL, {action:'composeUpdateMultiple', paths:JSON.stringify(paths)}, function(data) {
+    if (data) {
+      openBox(data, 'Update All Stacks', height, width, true);
+    }
   });
 }
 
@@ -3142,15 +3232,14 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
 </table>
 <span class='tipsterallowed' hidden>
 <input type='button' value='Add New Stack' onclick='addStack();'>
-<input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn' style='margin-left:10px;'>
-<span style='margin-left:20px;'>
-  <input type='button' value='Start All' onclick='startAllStacks();' id='startAllBtn'>
-  <input type='button' value='Stop All' onclick='stopAllStacks();' id='stopAllBtn' style='margin-left:5px;'>
-  <label style='margin-left:10px;cursor:pointer;vertical-align:middle;' title='When enabled, only stacks with Autostart enabled will be affected'>
-    <input type='checkbox' id='autostartOnlyToggle' style='vertical-align:middle;'>
-    <span style='vertical-align:middle;'>Autostart only</span>
-  </label>
-</span>
+<input type='button' value='Start All' onclick='startAllStacks();' id='startAllBtn'>
+<input type='button' value='Stop All' onclick='stopAllStacks();' id='stopAllBtn'>
+<input type='button' value='Check for Updates' onclick='checkAllUpdates();' id='checkUpdatesBtn'>
+<input type='button' value='Update All' onclick='updateAllStacks();' id='updateAllBtn' disabled>
+<label style='margin-left:10px;cursor:pointer;vertical-align:middle;' title='When enabled, only stacks with Autostart enabled will be affected'>
+  <input type='checkbox' id='autostartOnlyToggle' style='vertical-align:middle;'>
+  <span style='vertical-align:middle;'>Autostart only</span>
+</label>
 <a href='/Settings/compose.manager.settings' style='margin-left:20px;'><input type='button' value='Settings'></a>
 </span><br>
 

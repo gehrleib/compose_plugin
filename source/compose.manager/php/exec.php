@@ -755,6 +755,71 @@ switch ($_POST['action']) {
             echo json_encode([ 'result' => 'success', 'stacks' => [] ]);
         }
         break;
+    case 'getLogs':
+        // Get compose-related log entries from syslog
+        $lines = isset($_POST['lines']) ? intval($_POST['lines']) : 100;
+        $filter = isset($_POST['filter']) ? trim($_POST['filter']) : '';
+        
+        // Sanitize inputs
+        $lines = max(10, min(5000, $lines)); // Limit between 10 and 5000 lines
+        
+        // Build grep command to find compose-related entries
+        // Look for: compose, docker compose, compose.manager entries
+        $grepPattern = 'compose\\|docker compose\\|compose.manager\\|compose.sh';
+        
+        // Read from syslog
+        $syslogFile = '/var/log/syslog';
+        if (!is_file($syslogFile)) {
+            $syslogFile = '/var/log/messages';
+        }
+        
+        if (!is_file($syslogFile)) {
+            echo json_encode([ 'result' => 'error', 'message' => 'Syslog file not found' ]);
+            break;
+        }
+        
+        // Use grep to find relevant entries and tail to limit output
+        $cmd = "grep -i " . escapeshellarg($grepPattern) . " " . escapeshellarg($syslogFile);
+        
+        // Apply additional filter if provided
+        if (!empty($filter)) {
+            $cmd .= " | grep -i " . escapeshellarg($filter);
+        }
+        
+        $cmd .= " | tail -n " . escapeshellarg($lines);
+        
+        $output = [];
+        exec($cmd, $output, $returnCode);
+        
+        // Parse log entries
+        $logs = [];
+        foreach ($output as $line) {
+            // Parse syslog format: "Mon DD HH:MM:SS hostname source[pid]: message"
+            // or: "YYYY-MM-DD HH:MM:SS hostname source[pid]: message"
+            if (preg_match('/^(\w+\s+\d+\s+\d+:\d+:\d+|\d{4}-\d{2}-\d{2}\s+\d+:\d+:\d+)\s+(\S+)\s+([^:]+):\s*(.*)$/', $line, $matches)) {
+                $logs[] = [
+                    'timestamp' => $matches[1],
+                    'hostname' => $matches[2],
+                    'source' => trim($matches[3]),
+                    'message' => $matches[4]
+                ];
+            } else {
+                // Fallback for lines that don't match expected format
+                $logs[] = [
+                    'timestamp' => '',
+                    'hostname' => '',
+                    'source' => 'unknown',
+                    'message' => $line
+                ];
+            }
+        }
+        
+        echo json_encode([ 
+            'result' => 'success', 
+            'logs' => $logs,
+            'count' => count($logs)
+        ]);
+        break;
 }
 
 ?>

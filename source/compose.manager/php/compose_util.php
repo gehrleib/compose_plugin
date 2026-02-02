@@ -283,5 +283,11 @@ switch ($_POST['action']) {
 			echoComposeCommandMultiple('down', $paths);
 		}
 		break;
+	case 'composeUpdateMultiple':
+		$paths = isset($_POST['paths']) ? json_decode($_POST['paths'], true) : array();
+		if (!empty($paths)) {
+			echoComposeCommandMultiple('update', $paths);
+		}
+		break;
 }
 ?>
