@@ -64,9 +64,9 @@ function composeLoadlist() {
 
 // Initialize UI components after stack list is loaded
 function initStackListUI() {
-  // Initialize autostart switches
-  $('.auto_start').switchButton({labels_placement:'right', on_label:"On", off_label:"Off"});
-  $('.auto_start').change(function(){
+  // Initialize autostart switches - scope to compose_list to avoid conflict with Docker tab
+  $('#compose_list .auto_start').switchButton({labels_placement:'right', on_label:"On", off_label:"Off"});
+  $('#compose_list .auto_start').change(function(){
     var script = $(this).attr("data-scriptname");
     var auto = $(this).prop('checked');
     $.post(caURL, {action:'updateAutostart', script:script, autostart:auto});
@@ -77,21 +77,21 @@ function initStackListUI() {
     addComposeStackContext(this.id);
   });
   
-  // Apply readmore to descriptions
-  $('.docker_readmore').readmore({
+  // Apply readmore to descriptions - scope to compose_stacks
+  $('#compose_stacks .docker_readmore').readmore({
     maxHeight: 32,
     moreLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",
     lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
   });
   
-  // Apply current view mode (advanced/basic)
+  // Apply current view mode (advanced/basic) - scope to compose_stacks
   var advanced = $.cookie('compose_listview_mode') === 'advanced';
   if (advanced) {
-    $('.advanced').show();
-    $('.basic').hide();
+    $('#compose_stacks .advanced').show();
+    $('#compose_stacks .basic').hide();
   } else {
-    $('.advanced').hide();
-    $('.basic').show();
+    $('#compose_stacks .advanced').hide();
+    $('#compose_stacks .basic').show();
   }
   
   // Load saved update status after list is loaded
@@ -480,8 +480,8 @@ function checkAllUpdates() {
     $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
   }).fail(function() {
     $('#checkUpdatesBtn').prop('disabled', false).val('Check for Updates');
-    // Reset update columns to not checked state
-    $('.updatecolumn').each(function() {
+    // Reset update columns to not checked state - scope to compose_stacks
+    $('#compose_stacks .updatecolumn').each(function() {
       var $cell = $(this);
       if (!$cell.find('.grey-text').length || $cell.find('.fa-docker').length === 0) {
         // Only reset running stacks (not the "stopped" ones)
@@ -654,17 +654,18 @@ $(function() {
 })
 
 // Apply advanced/basic view based on cookie (used after async load)
+// Scoped to compose_stacks to avoid affecting Docker tab when tabs are joined
 function applyListView() {
   var advanced = $.cookie('compose_listview_mode') === 'advanced';
   if (advanced) {
-    $('.advanced').show();
-    $('.basic').hide();
+    $('#compose_stacks .advanced').show();
+    $('#compose_stacks .basic').hide();
   } else {
-    $('.advanced').hide();
-    $('.basic').show();
+    $('#compose_stacks .advanced').hide();
+    $('#compose_stacks .basic').show();
   }
   // Apply readmore to descriptions
-  $('.docker_readmore').readmore({maxHeight:32,moreLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"});
+  $('#compose_stacks .docker_readmore').readmore({maxHeight:32,moreLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-down'></i></a>",lessLink:"<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"});
 }
 
 $(function() {
@@ -697,13 +698,15 @@ $(function() {
 	});
   
   // Add Advanced View toggle (like Docker tab)
-  $(".tabs").append('<span class="status"><span><input type="checkbox" class="advancedview"></span></span>');
-  $('.advancedview').switchButton({labels_placement:'left', on_label:'Advanced View', off_label:'Basic View', checked:$.cookie('compose_listview_mode')==='advanced'});
-  $('.advancedview').change(function(){
+  // Use compose-specific class to avoid conflict with Docker tab's advancedview when tabs are joined
+  $(".tabs").append('<span class="status compose-view-toggle"><span><input type="checkbox" class="compose-advancedview"></span></span>');
+  $('.compose-advancedview').switchButton({labels_placement:'left', on_label:'Advanced View', off_label:'Basic View', checked:$.cookie('compose_listview_mode')==='advanced'});
+  $('.compose-advancedview').change(function(){
     // Use instant toggle to avoid text wrapping issues during animation
-    $('.advanced').toggle();
-    $('.basic').toggle();
-    $.cookie('compose_listview_mode', $('.advancedview').is(':checked') ? 'advanced' : 'basic', {expires:3650});
+    // Scope to compose_stacks table to avoid affecting Docker tab
+    $('#compose_stacks .advanced').toggle();
+    $('#compose_stacks .basic').toggle();
+    $.cookie('compose_listview_mode', $('.compose-advancedview').is(':checked') ? 'advanced' : 'basic', {expires:3650});
   });
   
   // Set up MutationObserver to detect when ebox (progress dialog) closes
