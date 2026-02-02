@@ -25,7 +25,7 @@ Install via the Community Applications plugin in unRAID, or manually install by 
 
 **Plugins → Install Plugin** and entering the plugin URL:
 ```
-https://raw.githubusercontent.com/mstrhakr/compose_plugin/dev/compose.manager.plg
+https://raw.githubusercontent.com/mstrhakr/compose_plugin/main/compose.manager.plg
 ```
 
 ## Requirements
