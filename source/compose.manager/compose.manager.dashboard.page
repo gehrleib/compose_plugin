@@ -84,8 +84,14 @@ $styles = <<<EOT
     border-radius: 4px;
 }
 .compose-dash-icon img { width: 32px; height: 32px; border-radius: 4px; }
-.compose-dash-name { flex: 1; font-weight: 500; }
-.compose-dash-status { margin-left: 8px; }
+.compose-dash-info { flex: 1; min-width: 0; }
+.compose-dash-name { font-weight: 500; }
+.compose-dash-state { font-size: 0.85em; margin-top: 1px; }
+.compose-dash-cols { display: flex; align-items: center; gap: 12px; font-size: 0.85em; }
+.compose-dash-col { white-space: nowrap; }
+.compose-dash-col.update { min-width: 70px; }
+.compose-dash-col.containers { min-width: 30px; text-align: center; }
+.compose-dash-col.uptime { min-width: 60px; color: #888; }
 .compose-dash-containers {
     display: none;
     margin-left: 28px;
@@ -254,17 +260,42 @@ $script = <<<'EOT'
                 data.stacks.forEach(function(stack, idx) {
                     var stackId = 'stack-' + idx;
                     var state = stack.state;
-                    var stateIcon = state === 'started' ? 'fa-play green-text' : 
-                                   (state === 'partial' ? 'fa-exclamation-circle orange-text' : 'fa-square red-text');
-                    var statusText = state === 'partial' ? stack.running + '/' + stack.total : state;
+                    var stateIcon = state === 'started' ? 'fa-play' : 
+                                   (state === 'partial' ? 'fa-exclamation-circle' : 'fa-square');
+                    var stateColor = state === 'started' ? 'green-text' : 
+                                    (state === 'partial' ? 'orange-text' : 'red-text');
+                    var stateText = state === 'partial' ? 'partial' : state;
                     var imgSrc = stack.icon || '/plugins/dynamix.docker.manager/images/question.png';
                     var isRunning = state === 'started' || state === 'partial';
+                    
+                    // Update status display
+                    var updateIcon, updateText, updateColor;
+                    if (stack.update === 'up-to-date') {
+                        updateIcon = 'fa-check'; updateText = 'current'; updateColor = 'green-text';
+                    } else if (stack.update === 'update-available') {
+                        updateIcon = 'fa-arrow-up'; updateText = 'update'; updateColor = 'orange-text';
+                    } else {
+                        updateIcon = 'fa-question-circle'; updateText = ''; updateColor = 'grey-text';
+                    }
+                    
+                    // Container count
+                    var containerText = stack.running + '/' + stack.total;
+                    
+                    // Uptime
+                    var uptimeText = stack.uptime || (state === 'stopped' ? 'stopped' : '');
                     
                     html += '<div class="compose-dash-stack" onclick="window.composeToggleStack(\'' + stackId + '\', \'' + stack.folder + '\')">';
                     html += '<i class="fa fa-chevron-right compose-dash-expand" id="compose-dash-exp-' + stackId + '"></i>';
                     html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '"><img src="' + imgSrc + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
-                    html += '<span class="compose-dash-name">' + $('<div>').text(stack.name).html() + '</span>';
-                    html += '<span class="compose-dash-status"><i class="fa ' + stateIcon + '"></i> ' + statusText + '</span>';
+                    html += '<span class="compose-dash-info">';
+                    html += '<div class="compose-dash-name">' + $('<div>').text(stack.name).html() + '</div>';
+                    html += '<div class="compose-dash-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';
+                    html += '</span>';
+                    html += '<span class="compose-dash-cols">';
+                    html += '<span class="compose-dash-col update ' + updateColor + '" title="Update status"><i class="fa ' + updateIcon + '"></i> ' + updateText + '</span>';
+                    html += '<span class="compose-dash-col containers" title="Running/Total containers">' + containerText + '</span>';
+                    html += '<span class="compose-dash-col uptime" title="Uptime">' + uptimeText + '</span>';
+                    html += '</span>';
                     html += '</div>';
                     html += '<div class="compose-dash-containers" id="compose-dash-ct-' + stackId + '"></div>';
                     

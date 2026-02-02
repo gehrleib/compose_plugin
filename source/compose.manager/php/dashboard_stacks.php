@@ -71,10 +71,17 @@ foreach ($projects as $project) {
     
     $runningCount = 0;
     $totalContainers = count($projectContainers);
+    $uptime = '';
     
     foreach ($projectContainers as $ct) {
         if (($ct['State'] ?? '') === 'running') {
             $runningCount++;
+            // Get uptime from first running container
+            if (empty($uptime) && isset($ct['Status'])) {
+                if (preg_match('/Up ([^(]+)/', $ct['Status'], $uptimeMatch)) {
+                    $uptime = trim($uptimeMatch[1]);
+                }
+            }
         }
     }
     
@@ -102,13 +109,21 @@ foreach ($projects as $project) {
         }
     }
     
+    // Check update status from cache file (set by "Check for Updates" button)
+    $updateStatus = 'unknown';
+    if (is_file("$compose_root/$project/update_status")) {
+        $updateStatus = trim(@file_get_contents("$compose_root/$project/update_status"));
+    }
+    
     $summary['stacks'][] = [
         'name' => $projectName,
         'folder' => $project,
         'state' => $state,
         'running' => $runningCount,
         'total' => $totalContainers,
-        'icon' => $icon
+        'icon' => $icon,
+        'uptime' => $uptime,
+        'update' => $updateStatus
     ];
 }
 
