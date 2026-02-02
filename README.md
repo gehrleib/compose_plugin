@@ -2,6 +2,8 @@
 
 A plugin for [unRAID](https://unraid.net/) that installs Docker Compose and adds a management interface to the web UI.
 
+![Compose Manager UI](source/compose.manager/images/compose-manager-ui.png)
+
 ## Features
 
 - **Docker Compose Integration** - Installs the Docker Compose CLI plugin on your unRAID server
