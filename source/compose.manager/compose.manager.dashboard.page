@@ -1,0 +1,304 @@
+Menu="Dashboard:1"
+Cond="is_dir('/usr/local/emhttp/plugins/compose.manager')"
+---
+<?PHP
+/**
+ * Compose Manager Dashboard Tile
+ * Uses $mytiles pattern with async loading
+ * Reuses docker.js context menus and exec.php endpoints from Compose tab
+ */
+
+$pluginname = "compose.manager";
+$plugin_root = "/usr/local/emhttp/plugins/compose.manager";
+
+if (!is_dir($plugin_root)) return;
+
+$cfg = @parse_ini_file("/boot/config/plugins/compose.manager/compose.manager.cfg");
+if (!$cfg) $cfg = [];
+
+$showDashboard = !isset($cfg['SHOW_DASHBOARD_TILE']) || $cfg['SHOW_DASHBOARD_TILE'] !== 'false';
+if (!$showDashboard) return;
+
+$unraidVersion = @parse_ini_file('/etc/unraid-version')['version'] ?? '0';
+$isResponsive = version_compare($unraidVersion, '7.2.0-beta', '>=');
+
+// Translated strings
+$tileTitle = _('Compose Stacks');
+$tileTitleAttr = _('Go to Compose Manager');
+$loadingText = _('Loading...');
+
+// Build tile header
+if ($isResponsive) {
+    $headerHtml = <<<EOT
+<span class='tile-header'>
+    <span class='tile-header-left'>
+        <i class='fa fa-cubes f32'></i>
+        <div class='section'>
+            <h3 class='tile-header-main'>$tileTitle</h3>
+            <span id='compose_stacks_status' class='compose-stacks switch'>$loadingText</span>
+        </div>
+    </span>
+    <span class='tile-header-right'>
+        <span class='tile-header-right-controls'>
+            <a href='/Docker/Compose' title="$tileTitleAttr">
+                <i class='fa fa-fw fa-cog control'></i>
+            </a>
+        </span>
+    </span>
+</span>
+EOT;
+} else {
+    $headerHtml = <<<EOT
+<i class='fa fa-cubes f32'></i>
+<div class='section'>$tileTitle<br>
+    <span id='compose_stacks_status' class='compose-stacks switch'>$loadingText</span><br>
+</div>
+<a href='/Docker/Compose' title="$tileTitleAttr">
+    <i class='fa fa-cog control'></i>
+</a>
+EOT;
+}
+
+// CSS and JavaScript
+$styles = <<<EOT
+<style>
+#compose_dash_content { padding: 4px 0; }
+.compose-dash-stack { 
+    display: flex; 
+    align-items: center; 
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.compose-dash-stack:hover { background: rgba(255,255,255,0.05); }
+.compose-dash-expand { 
+    width: 20px; 
+    transition: transform 0.2s;
+    color: #666;
+}
+.compose-dash-expand.expanded { transform: rotate(90deg); }
+.compose-dash-icon { 
+    width: 32px; 
+    height: 32px; 
+    margin: 0 8px;
+    border-radius: 4px;
+}
+.compose-dash-icon img { width: 32px; height: 32px; border-radius: 4px; }
+.compose-dash-name { flex: 1; font-weight: 500; }
+.compose-dash-status { margin-left: 8px; }
+.compose-dash-containers {
+    display: none;
+    margin-left: 28px;
+    padding: 4px 0 8px 0;
+    border-left: 2px solid #333;
+}
+.compose-dash-containers.expanded { display: block; }
+.compose-dash-container {
+    display: flex;
+    align-items: center;
+    padding: 3px 8px;
+}
+.compose-dash-container:hover { background: rgba(255,255,255,0.03); }
+.compose-dash-ct-icon { width: 24px; height: 24px; margin-right: 8px; cursor: pointer; }
+.compose-dash-ct-icon img { width: 24px; height: 24px; border-radius: 3px; }
+.compose-dash-ct-name { flex: 1; font-size: 0.9em; }
+.compose-dash-ct-status { font-size: 0.85em; }
+.compose-dash-loading { color: #888; font-style: italic; padding: 8px; }
+</style>
+EOT;
+
+$script = <<<'EOT'
+<script>
+(function() {
+    var caURL = '/plugins/compose.manager/php/exec.php';
+    var expandedStacks = {};
+    var stackContainerCache = {};
+    
+    // Stack context menu (similar to Compose tab)
+    function addStackContext(el, stackName, isRunning) {
+        var opts = [];
+        context.settings({right:false, above:false});
+        
+        if (isRunning) {
+            opts.push({text:'Stop', icon:'fa-stop', action:function(e){
+                e.preventDefault();
+                stackAction(stackName, 'stop');
+            }});
+            opts.push({text:'Restart', icon:'fa-refresh', action:function(e){
+                e.preventDefault();
+                stackAction(stackName, 'restart');
+            }});
+        } else {
+            opts.push({text:'Start', icon:'fa-play', action:function(e){
+                e.preventDefault();
+                stackAction(stackName, 'start');
+            }});
+        }
+        opts.push({divider:true});
+        opts.push({text:'Open Compose', icon:'fa-cubes', action:function(e){
+            e.preventDefault();
+            location.href = '/Docker/Compose';
+        }});
+        
+        context.attach(el, opts);
+    }
+    
+    function stackAction(stackName, action) {
+        var $status = $('#compose_stacks_status');
+        $status.text(action.charAt(0).toUpperCase() + action.slice(1) + 'ing ' + stackName + '...');
+        
+        $.post('/plugins/compose.manager/php/compose_util.php', {
+            action: 'compose' + action.charAt(0).toUpperCase() + action.slice(1),
+            path: '/boot/config/plugins/compose.manager/projects/' + stackName
+        }, function() {
+            setTimeout(loadComposeStacks, 1000);
+        });
+    }
+    
+    function toggleStack(stackId, stackName) {
+        var $containers = $('#compose-dash-ct-' + stackId);
+        var $icon = $('#compose-dash-exp-' + stackId);
+        
+        if (expandedStacks[stackId]) {
+            $containers.removeClass('expanded');
+            $icon.removeClass('expanded');
+            expandedStacks[stackId] = false;
+        } else {
+            $containers.addClass('expanded');
+            $icon.addClass('expanded');
+            expandedStacks[stackId] = true;
+            
+            if (!stackContainerCache[stackId]) {
+                loadStackContainers(stackId, stackName);
+            }
+        }
+    }
+    
+    function loadStackContainers(stackId, stackName) {
+        var $container = $('#compose-dash-ct-' + stackId);
+        $container.html('<div class="compose-dash-loading"><i class="fa fa-spinner fa-spin"></i> Loading...</div>');
+        
+        $.post(caURL, {action: 'getStackContainers', script: stackName}, function(data) {
+            try {
+                var response = JSON.parse(data);
+                if (response.containers && response.containers.length > 0) {
+                    var html = '';
+                    response.containers.forEach(function(ct) {
+                        var state = ct.running ? 'started' : 'stopped';
+                        var stateIcon = ct.running ? 'fa-play green-text' : 'fa-square red-text';
+                        var ctId = 'dash-ct-' + ct.id.substring(0, 12);
+                        var imgSrc = ct.icon || '/plugins/dynamix.docker.manager/images/question.png';
+                        
+                        html += '<div class="compose-dash-container">';
+                        html += '<span class="compose-dash-ct-icon" id="' + ctId + '">';
+                        html += '<img src="' + imgSrc + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
+                        html += '</span>';
+                        html += '<span class="compose-dash-ct-name">' + ct.name + '</span>';
+                        html += '<span class="compose-dash-ct-status"><i class="fa ' + stateIcon + '"></i></span>';
+                        html += '</div>';
+                    });
+                    $container.html(html);
+                    
+                    // Attach context menus using docker.js function
+                    response.containers.forEach(function(ct) {
+                        var ctId = '#dash-ct-' + ct.id.substring(0, 12);
+                        if (typeof addDockerContainerContext === 'function') {
+                            // addDockerContainerContext(name, imageId, template, started, paused, update, autostart, webui, tswebui, shell, id, support, project, registry, donateLink, readme)
+                            $(ctId).on('click', function(e) {
+                                e.stopPropagation();
+                                addDockerContainerContext(
+                                    ct.name,           // container name
+                                    ct.imageId || '',  // image id
+                                    '',                // template (empty for compose)
+                                    ct.running ? 1 : 0,// started
+                                    0,                 // paused
+                                    0,                 // update status
+                                    0,                 // autostart
+                                    ct.webui || '',    // webui
+                                    '',                // tailscale webui
+                                    'sh',              // shell
+                                    ct.id.substring(0, 12), // container id
+                                    '',                // support
+                                    '',                // project
+                                    '',                // registry
+                                    '',                // donate
+                                    ''                 // readme
+                                );
+                            });
+                        }
+                    });
+                    
+                    stackContainerCache[stackId] = true;
+                } else {
+                    $container.html('<div class="compose-dash-loading">No containers</div>');
+                }
+            } catch(e) {
+                $container.html('<div class="compose-dash-loading">Error loading containers</div>');
+            }
+        });
+    }
+    
+    function loadComposeStacks() {
+        $.post('/plugins/compose.manager/php/dashboard_stacks.php', function(data) {
+            var statusText = 'Stacks -- Started: ' + data.started + ', Stopped: ' + data.stopped;
+            if (data.partial > 0) statusText += ', Partial: ' + data.partial;
+            $('#compose_stacks_status').text(statusText);
+            
+            var html = '';
+            if (data.stacks.length === 0) {
+                html = '<div class="compose-dash-loading">No compose stacks defined</div>';
+            } else {
+                data.stacks.forEach(function(stack, idx) {
+                    var stackId = 'stack-' + idx;
+                    var state = stack.state;
+                    var stateIcon = state === 'started' ? 'fa-play green-text' : 
+                                   (state === 'partial' ? 'fa-exclamation-circle orange-text' : 'fa-square red-text');
+                    var statusText = state === 'partial' ? stack.running + '/' + stack.total : state;
+                    var imgSrc = stack.icon || '/plugins/dynamix.docker.manager/images/question.png';
+                    var isRunning = state === 'started' || state === 'partial';
+                    
+                    html += '<div class="compose-dash-stack" onclick="window.composeToggleStack(\'' + stackId + '\', \'' + stack.folder + '\')">';
+                    html += '<i class="fa fa-chevron-right compose-dash-expand" id="compose-dash-exp-' + stackId + '"></i>';
+                    html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '"><img src="' + imgSrc + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
+                    html += '<span class="compose-dash-name">' + $('<div>').text(stack.name).html() + '</span>';
+                    html += '<span class="compose-dash-status"><i class="fa ' + stateIcon + '"></i> ' + statusText + '</span>';
+                    html += '</div>';
+                    html += '<div class="compose-dash-containers" id="compose-dash-ct-' + stackId + '"></div>';
+                    
+                    // Store data for context menu
+                    setTimeout(function() {
+                        var $icon = $('#compose-dash-icon-' + stackId);
+                        $icon.on('click', function(e) {
+                            e.stopPropagation();
+                            addStackContext(this, stack.folder, isRunning);
+                        });
+                    }, 0);
+                });
+            }
+            
+            $('#compose_dash_content').html(html);
+        }, 'json').fail(function() {
+            $('#compose_stacks_status').text('Stacks -- Error loading');
+            $('#compose_dash_content').html('<div class="compose-dash-loading red-text">Failed to load stacks</div>');
+        });
+    }
+    
+    // Expose toggle function globally
+    window.composeToggleStack = toggleStack;
+    
+    $(function() {
+        loadComposeStacks();
+    });
+})();
+</script>
+EOT;
+
+$mytiles[$pluginname]['column2'] = <<<EOT
+<tbody id="compose_stacks_view" title="$tileTitle">
+<tr><td>$headerHtml</td></tr>
+<tr class='updated'><td><div id='compose_dash_content'><em>$loadingText</em></div></td></tr>
+</tbody>
+$styles
+$script
+EOT;
+?>

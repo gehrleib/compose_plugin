@@ -380,6 +380,17 @@ _(Show Compose in Header Menu)_:
   This will move the Compose Manager page to a separate tab in the Unraid Header menu.
 </blockquote>
 
+_(Show Dashboard Tile)_:
+: <select name="SHOW_DASHBOARD_TILE">
+  <?=mk_option($cfg['SHOW_DASHBOARD_TILE'] ?? 'true', "true", _("Yes"))?>
+  <?=mk_option($cfg['SHOW_DASHBOARD_TILE'] ?? 'true', "false", _("No"))?>
+  </select>
+
+<blockquote class="inline_help">
+  Show a Compose Stacks tile on the Unraid dashboard.<br>
+  The tile displays stack status similar to the Docker Containers tile.
+</blockquote>
+
 _(Auto Check for Updates)_:
 : <select name="AUTO_CHECK_UPDATES" id="AUTO_CHECK_UPDATES" onchange="toggleAutoCheckInterval()">
   <?=mk_option($cfg['AUTO_CHECK_UPDATES'], "false", _("Disabled"))?>
