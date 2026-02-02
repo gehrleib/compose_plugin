@@ -28,9 +28,59 @@
 >
 
 <CHANGES>
+###2026.02.01j
+- Scope UI initialization and updates to avoid conflicts with Docker tab
+###2026.02.01i
+- Rename loadlist function to composeLoadlist for namespace clarity
+###2026.02.01h
+- Update UI for auto check interval and add settings button in stack actions
+- Enhance stack creation by returning project details for frontend integration
+###2026.02.01g
+- Add support for default and multiple profiles in stack operations
+###2026.02.01f
+- Fix update checking for images pinned with SHA256 digest
+- Images pinned to specific digests now show 'pinned' status instead of 'not checked'
+###2026.02.01e
+- Add functions to start and stop all stacks
+- Handle multiple stack commands
+###2026.02.01
+- Revamp CI/CD workflows for improved release automation and versioning
+- Add clear update cache functionality to manage stale entries
+###0.1.3
+- Refactor async timers to avoid collision
+- Add missing ace mode-sh.js file
+- Add asynchronous stack list loader for improved page load performance
+- Implement auto-check for updates feature with configurable interval
+###0.1.2
+- Add project URL and readme link to plugin metadata
+- Add detailed package description
+###0.1.1
+- Enhance release script to support version bumping and rollback on failure
+- Enhance plugin description and usage instructions in metadata
+- Add build and release scripts
 ###0.1.0
 - Fork from dcflachs/compose_plugin
-- UX improvements for Compose tab
+- Add expandable stack rows with container details table
+- Add container icons fetched from Docker templates
+- Add context menus for stacks and containers (right-click)
+- Add Check for Updates button with SHA digest comparison
+- Add update status column matching Docker tab style
+- Add confirmation dialogs for stack actions (up/down/update)
+- Add Advanced View toggle with force update option
+- Replace autostart column with update status column
+- Use native Unraid SweetAlert for all dialogs
+- Add tabbed editor modal for compose files (docker-compose.yml, .env, override)
+- Add real-time YAML syntax validation using js-yaml
+- Track unsaved changes with visual indicators on tabs
+- Keyboard shortcuts: Ctrl+S to save, Escape to close
+- Fix XSS vulnerability in YAML error display
+- Add ARIA accessibility attributes to editor modal
+- Replace swal2 with swal for consistent alert handling
+- Fix cached local SHA for accurate image inspection after docker compose pull
+- Add 'Edit Stack' option to context menu
+- Enhance settings and labels panel styles
+- Increase font sizes in editor modal for improved readability
+- Add support for Docker Hub official images in SHA retrieval
 ###2025.11.01 
 - Docker Compose v2.40.3
 ###2025.05.01
