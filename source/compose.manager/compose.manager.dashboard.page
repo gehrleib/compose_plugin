@@ -78,6 +78,15 @@ EOT;
 $styles = <<<EOT
 <style>
 #compose_dash_content { padding: 4px 0; }
+/* Fixed column widths for perfect alignment */
+:root {
+    --compose-expand-width: 20px;
+    --compose-icon-area: 48px;   /* 32px icon + 16px margins */
+    --compose-name-width: 120px;
+    --compose-update-width: 70px;
+    --compose-count-width: 30px;
+    --compose-uptime-width: 60px;
+}
 .compose-dash-stack { 
     display: flex; 
     align-items: center; 
@@ -87,7 +96,8 @@ $styles = <<<EOT
 }
 .compose-dash-stack:hover { background: rgba(255,255,255,0.05); }
 .compose-dash-expand { 
-    width: 20px; 
+    width: var(--compose-expand-width);
+    flex-shrink: 0;
     transition: transform 0.2s;
     color: #666;
 }
@@ -96,34 +106,40 @@ $styles = <<<EOT
     width: 32px; 
     height: 32px; 
     margin: 0 8px;
+    flex-shrink: 0;
     border-radius: 4px;
 }
 .compose-dash-icon img { width: 32px; height: 32px; border-radius: 4px; }
-.compose-dash-info { flex: 1; min-width: 0; }
-.compose-dash-name { font-weight: 500; }
+.compose-dash-info { width: var(--compose-name-width); flex-shrink: 0; min-width: 0; }
+.compose-dash-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .compose-dash-state { font-size: 0.85em; margin-top: 1px; }
-.compose-dash-cols { display: flex; align-items: center; gap: 12px; font-size: 0.85em; }
-.compose-dash-col { white-space: nowrap; }
-.compose-dash-col.update { min-width: 70px; }
-.compose-dash-col.containers { min-width: 30px; text-align: center; }
-.compose-dash-col.uptime { min-width: 60px; color: #888; }
+.compose-dash-cols { display: flex; align-items: center; gap: 8px; font-size: 0.85em; flex: 1; }
+.compose-dash-col { white-space: nowrap; flex-shrink: 0; }
+.compose-dash-col.update { width: var(--compose-update-width); }
+.compose-dash-col.containers { width: var(--compose-count-width); text-align: center; }
+.compose-dash-col.uptime { flex: 1; color: #888; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .compose-dash-containers {
     display: none;
-    margin-left: 28px;
     padding: 4px 0 8px 0;
-    border-left: 2px solid #333;
 }
 .compose-dash-containers.expanded { display: block; }
 .compose-dash-container {
     display: flex;
     align-items: center;
     padding: 3px 8px;
+    padding-left: calc(var(--compose-expand-width) + 8px);
 }
 .compose-dash-container:hover { background: rgba(255,255,255,0.03); }
-.compose-dash-ct-icon { width: 24px; height: 24px; margin-right: 8px; cursor: pointer; }
+/* Container icon: 24px + 24px margins = 48px total to match stack icon area */
+.compose-dash-ct-icon { width: 24px; height: 24px; margin: 0 12px; cursor: pointer; flex-shrink: 0; }
 .compose-dash-ct-icon img { width: 24px; height: 24px; border-radius: 3px; }
-.compose-dash-ct-name { flex: 1; font-size: 0.9em; }
-.compose-dash-ct-status { font-size: 0.85em; }
+.compose-dash-ct-info { width: var(--compose-name-width); flex-shrink: 0; min-width: 0; }
+.compose-dash-ct-name { font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compose-dash-ct-state { font-size: 0.8em; margin-top: 1px; }
+.compose-dash-ct-cols { display: flex; align-items: center; gap: 8px; font-size: 0.85em; flex: 1; }
+.compose-dash-ct-update { width: var(--compose-update-width); white-space: nowrap; flex-shrink: 0; }
+.compose-dash-ct-update .sha { font-family: monospace; font-size: 0.9em; }
+.compose-dash-ct-image { flex: 1; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 .compose-dash-loading { color: #888; font-style: italic; padding: 8px; }
 </style>
 EOT;
@@ -332,22 +348,46 @@ $script = <<<'EOT'
                 if (response.containers && response.containers.length > 0) {
                     var html = '';
                     response.containers.forEach(function(ct) {
-                        // API returns capitalized property names: State, ID, Icon, Name, WebUI
+                        // API returns capitalized property names: State, ID, Icon, Name, WebUI, Image, UpdateStatus, LocalSha, RemoteSha
                         var isRunning = ct.State === 'running';
-                        var stateIcon = isRunning ? 'fa-play green-text' : 'fa-square red-text';
+                        var stateIcon = isRunning ? 'fa-play' : 'fa-square';
+                        var stateColor = isRunning ? 'green-text' : 'red-text';
+                        var stateText = isRunning ? 'started' : 'stopped';
                         var ctElId = 'dash-ct-' + ct.ID.substring(0, 12);
                         var imgSrc = ct.Icon || '/plugins/dynamix.docker.manager/images/question.png';
                         var escapedName = ct.Name.replace(/'/g, "\\'");
                         var webui = (ct.WebUI || '').replace(/'/g, "\\'");
                         var shell = (ct.Shell || 'sh').replace(/'/g, "\\'");
                         var shortId = ct.ID.substring(0, 12);
+                        // Parse image to get repo and tag
+                        var image = ct.Image || '';
+                        var imageDisplay = image.replace(/^.*\//, ''); // Remove registry prefix
+                        
+                        // Update status
+                        var updateStatus = ct.UpdateStatus || 'unknown';
+                        var localSha = ct.LocalSha || '';
+                        var remoteSha = ct.RemoteSha || '';
+                        var updateHtml = '';
+                        if (updateStatus === 'up-to-date') {
+                            updateHtml = '<span class="green-text"><i class="fa fa-check"></i> current</span>';
+                        } else if (updateStatus === 'update-available' && localSha && remoteSha) {
+                            updateHtml = '<span class="orange-text"><span class="sha">' + localSha + '</span> <i class="fa fa-arrow-right"></i> <span class="sha">' + remoteSha + '</span></span>';
+                        } else {
+                            updateHtml = '<span class="grey-text">--</span>';
+                        }
                         
                         html += '<div class="compose-dash-container">';
                         html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" onclick="addContainerContext(\'' + ctElId + '\',\'' + escapedName + '\',\'' + shortId + '\',' + isRunning + ',\'' + webui + '\',\'' + shell + '\')">';
                         html += '<img src="' + imgSrc + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
                         html += '</span>';
-                        html += '<span class="compose-dash-ct-name">' + ct.Name + '</span>';
-                        html += '<span class="compose-dash-ct-status"><i class="fa ' + stateIcon + '"></i></span>';
+                        html += '<span class="compose-dash-ct-info">';
+                        html += '<div class="compose-dash-ct-name">' + ct.Name + '</div>';
+                        html += '<div class="compose-dash-ct-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';
+                        html += '</span>';
+                        html += '<span class="compose-dash-ct-cols">';
+                        html += '<span class="compose-dash-ct-update">' + updateHtml + '</span>';
+                        html += '<span class="compose-dash-ct-image" title="' + image + '">' + imageDisplay + '</span>';
+                        html += '</span>';
                         html += '</div>';
                     });
                     $container.html(html);

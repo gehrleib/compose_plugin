@@ -487,6 +487,39 @@ switch ($_POST['action']) {
                                     $container['WebUI'] = $labels[$docker_label_webui] ?? '';
                                     $container['Icon'] = $labels[$docker_label_icon] ?? '';
                                     $container['Shell'] = $labels[$docker_label_shell] ?? '/bin/bash';
+                                    
+                                    // Get update status from saved status file
+                                    $updateStatusFile = "/var/lib/docker/unraid-update-status.json";
+                                    $updateStatus = [];
+                                    if (is_file($updateStatusFile)) {
+                                        $updateStatus = json_decode(file_get_contents($updateStatusFile), true) ?: [];
+                                    }
+                                    $imageName = $container['Image'];
+                                    // Ensure image has a tag for lookup
+                                    if (strpos($imageName, ':') === false) {
+                                        $imageName .= ':latest';
+                                    }
+                                    // Also try without registry prefix
+                                    $imageNameShort = preg_replace('/^[^\/]+\//', '', $imageName);
+                                    
+                                    $container['UpdateStatus'] = 'unknown';
+                                    $container['LocalSha'] = '';
+                                    $container['RemoteSha'] = '';
+                                    
+                                    // Check both full name and short name
+                                    $checkNames = [$imageName, $imageNameShort];
+                                    foreach ($updateStatus as $key => $status) {
+                                        foreach ($checkNames as $checkName) {
+                                            if ($key === $checkName || strpos($key, $checkName) !== false || strpos($checkName, $key) !== false) {
+                                                $container['LocalSha'] = substr($status['local'] ?? '', 0, 8);
+                                                $container['RemoteSha'] = substr($status['remote'] ?? '', 0, 8);
+                                                if (!empty($status['local']) && !empty($status['remote'])) {
+                                                    $container['UpdateStatus'] = ($status['local'] === $status['remote']) ? 'up-to-date' : 'update-available';
+                                                }
+                                                break 2;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
