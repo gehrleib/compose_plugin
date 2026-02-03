@@ -680,6 +680,16 @@ function updateStackUpdateUI(stackName, stackInfo) {
     $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><i class="fa fa-cloud-download fa-fw"></i> pull updates</a>');
   }
   
+  // Apply current view mode to newly inserted advanced/basic elements
+  var advanced = $.cookie('compose_listview_mode') === 'advanced';
+  if (advanced) {
+    $updateCell.find('.advanced').show();
+    $updateCell.find('.basic').hide();
+  } else {
+    $updateCell.find('.advanced').hide();
+    $updateCell.find('.basic').show();
+  }
+  
   // Rebuild context menus to reflect update status (only target icon spans with data-stackid, not the row)
   $('[id^="stack-"][data-stackid][data-project="' + stackName + '"]').each(function() {
     addComposeStackContext(this.id);
@@ -810,7 +820,16 @@ $(function() {
   
   // Add Advanced View toggle (like Docker tab)
   // Use compose-specific class to avoid conflict with Docker tab's advancedview when tabs are joined
-  $(".tabs").append('<span class="status compose-view-toggle"><span><input type="checkbox" class="compose-advancedview"></span></span>');
+  // Check if .tabs exists (joined under Docker tab) or create standalone toggle (own tab under Tasks)
+  var toggleHtml = '<span class="status compose-view-toggle"><span><input type="checkbox" class="compose-advancedview"></span></span>';
+  if ($(".tabs").length) {
+    $(".tabs").append(toggleHtml);
+  } else {
+    // Standalone page (xmenu under Tasks) - add toggle before the content area
+    // Style it to float right above the table for consistent positioning
+    var standaloneToggle = $('<div class="compose-standalone-toggle" style="text-align:right;margin-bottom:10px;"></div>').html(toggleHtml);
+    $('#compose_stacks').before(standaloneToggle);
+  }
   $('.compose-advancedview').switchButton({labels_placement:'left', on_label:'Advanced View', off_label:'Basic View', checked:$.cookie('compose_listview_mode')==='advanced'});
   $('.compose-advancedview').change(function(){
     // Use instant toggle to avoid text wrapping issues during animation
