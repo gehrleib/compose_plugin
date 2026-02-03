@@ -197,7 +197,11 @@ class DockerUpdateTest extends TestCase
      */
     public function testDockerUtilJsonMethods(): void
     {
-        $path = '/var/lib/docker/unraid-update-status.json';
+        // Use temp directory instead of /var/lib/docker which may not be writable
+        $testDir = sys_get_temp_dir() . '/compose_test_' . getmypid();
+        @mkdir($testDir, 0755, true);
+        $path = $testDir . '/unraid-update-status.json';
+        
         $data = [
             'library/nginx:latest' => [
                 'local' => 'sha256:abc',
@@ -217,6 +221,10 @@ class DockerUpdateTest extends TestCase
         
         $this->assertEquals($data, $loaded);
         $this->assertArrayHasKey('library/nginx:latest', $loaded);
+        
+        // Cleanup
+        @unlink($path);
+        @rmdir($testDir);
     }
 
     /**
