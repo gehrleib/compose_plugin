@@ -28,6 +28,7 @@
         "*.cfg": "ini"
     },
     
-    // BATS
-    "bats-test-runner.testPattern": "**/*.bats"
+    // BATS - use framework's Docker wrapper for cross-platform consistency
+    "bats-test-runner.testPattern": "**/*.bats",
+    "bats-test-runner.batsExecutable": "${workspaceFolder}/tests/framework/bin/run-bats.cmd"
 }
