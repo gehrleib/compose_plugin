@@ -79,14 +79,18 @@ foreach ($projects as $project) {
     $runningCount = 0;
     $totalContainers = count($projectContainers);
     $uptime = '';
+    $startedAt = '';
     
     foreach ($projectContainers as $ct) {
         if (($ct['State'] ?? '') === 'running') {
             $runningCount++;
-            // Get uptime from first running container
-            if (empty($uptime) && isset($ct['Status'])) {
-                if (preg_match('/Up ([^(]+)/', $ct['Status'], $uptimeMatch)) {
-                    $uptime = trim($uptimeMatch[1]);
+            // Get StartedAt from first running container via docker inspect
+            if (empty($startedAt) && isset($ct['Names'])) {
+                $containerName = trim($ct['Names']);
+                $inspectCmd = "docker inspect " . escapeshellarg($containerName) . " --format '{{.State.StartedAt}}' 2>/dev/null";
+                $inspectOutput = trim(shell_exec($inspectCmd) ?? '');
+                if (!empty($inspectOutput)) {
+                    $startedAt = $inspectOutput;
                 }
             }
         }
@@ -142,7 +146,7 @@ foreach ($projects as $project) {
         'total' => $totalContainers,
         'icon' => $icon,
         'webui' => $webui,
-        'uptime' => $uptime,
+        'startedAt' => $startedAt,
         'update' => $updateStatus
     ];
 }

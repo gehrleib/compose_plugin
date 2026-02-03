@@ -85,7 +85,8 @@ $styles = <<<EOT
     --compose-name-width: 120px;
     --compose-update-width: 70px;
     --compose-count-width: 30px;
-    --compose-uptime-width: 60px;
+    --compose-image-width: 80px;
+    --compose-uptime-width: 90px;
 }
 .compose-dash-stack { 
     display: flex; 
@@ -117,7 +118,8 @@ $styles = <<<EOT
 .compose-dash-col { white-space: nowrap; flex-shrink: 0; }
 .compose-dash-col.update { width: var(--compose-update-width); }
 .compose-dash-col.containers { width: var(--compose-count-width); text-align: center; }
-.compose-dash-col.uptime { flex: 1; color: #888; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compose-dash-col.spacer { width: var(--compose-image-width); } /* Spacer to align with container image column */
+.compose-dash-col.uptime { width: var(--compose-uptime-width); color: #888; text-align: right; }
 .compose-dash-containers {
     display: none;
     padding: 4px 0 8px 0;
@@ -139,7 +141,8 @@ $styles = <<<EOT
 .compose-dash-ct-cols { display: flex; align-items: center; gap: 8px; font-size: 0.85em; flex: 1; }
 .compose-dash-ct-update { width: var(--compose-update-width); white-space: nowrap; flex-shrink: 0; }
 .compose-dash-ct-update .sha { font-family: monospace; font-size: 0.9em; }
-.compose-dash-ct-image { flex: 1; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.compose-dash-ct-image { width: calc(var(--compose-count-width) + var(--compose-image-width) + 8px); color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.compose-dash-ct-uptime { width: var(--compose-uptime-width); color: #888; text-align: right; white-space: nowrap; flex-shrink: 0; }
 .compose-dash-loading { color: #888; font-style: italic; padding: 8px; }
 </style>
 EOT;
@@ -155,6 +158,36 @@ $script = <<<'EOT'
     function debugLog() {
         if (window.composeDashDebug) {
             console.log.apply(console, ['[ComposeDash]'].concat(Array.prototype.slice.call(arguments)));
+        }
+    }
+    
+    // Smart uptime formatting - single unit, less granularity over time
+    function formatUptime(startedAt, isRunning) {
+        if (!isRunning) return 'stopped';
+        if (!startedAt) return '';
+        
+        var started = new Date(startedAt);
+        var now = new Date();
+        var diffMs = now - started;
+        var mins = Math.floor(diffMs / (1000 * 60));
+        var hours = Math.floor(diffMs / (1000 * 60 * 60));
+        var days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        var weeks = Math.floor(days / 7);
+        var months = Math.floor(days / 30);
+        var years = Math.floor(days / 365);
+        
+        if (mins < 120) {
+            return mins + ' min' + (mins !== 1 ? 's' : '');
+        } else if (hours < 48) {
+            return hours + ' hour' + (hours !== 1 ? 's' : '');
+        } else if (days < 14) {
+            return days + ' day' + (days !== 1 ? 's' : '');
+        } else if (weeks < 8) {
+            return weeks + ' week' + (weeks !== 1 ? 's' : '');
+        } else if (months < 24) {
+            return months + ' month' + (months !== 1 ? 's' : '');
+        } else {
+            return years + ' year' + (years !== 1 ? 's' : '');
         }
     }
     
@@ -376,6 +409,9 @@ $script = <<<'EOT'
                             updateHtml = '<span class="grey-text">--</span>';
                         }
                         
+                        // Container uptime - use shared smart formatting
+                        var ctUptime = formatUptime(ct.StartedAt, isRunning);
+                        
                         html += '<div class="compose-dash-container">';
                         html += '<span class="compose-dash-ct-icon" id="' + ctElId + '" onclick="addContainerContext(\'' + ctElId + '\',\'' + escapedName + '\',\'' + shortId + '\',' + isRunning + ',\'' + webui + '\',\'' + shell + '\')">';
                         html += '<img src="' + imgSrc + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';">';
@@ -387,6 +423,7 @@ $script = <<<'EOT'
                         html += '<span class="compose-dash-ct-cols">';
                         html += '<span class="compose-dash-ct-update">' + updateHtml + '</span>';
                         html += '<span class="compose-dash-ct-image" title="' + image + '">' + imageDisplay + '</span>';
+                        html += '<span class="compose-dash-ct-uptime">' + ctUptime + '</span>';
                         html += '</span>';
                         html += '</div>';
                     });
@@ -437,8 +474,8 @@ $script = <<<'EOT'
                     // Container count
                     var containerText = stack.running + '/' + stack.total;
                     
-                    // Uptime
-                    var uptimeText = stack.uptime || (state === 'stopped' ? 'stopped' : '');
+                    // Uptime - use smart formatting from startedAt
+                    var uptimeText = formatUptime(stack.startedAt, isRunning);
                     
                     // WebUI
                     var webui = (stack.webui || '').replace(/'/g, "\\'");
@@ -456,6 +493,7 @@ $script = <<<'EOT'
                     html += '<span class="compose-dash-cols">';
                     html += '<span class="compose-dash-col update ' + updateColor + '" title="Update status"><i class="fa ' + updateIcon + '"></i> ' + updateText + '</span>';
                     html += '<span class="compose-dash-col containers" title="Running/Total containers">' + containerText + '</span>';
+                    html += '<span class="compose-dash-col spacer"></span>';
                     html += '<span class="compose-dash-col uptime" title="Uptime">' + uptimeText + '</span>';
                     html += '</span>';
                     html += '</div>';
