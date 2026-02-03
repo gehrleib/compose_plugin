@@ -28,6 +28,149 @@
 >
 
 <CHANGES>
+###2026.02.03a
+- Features: Add Docker update tests and update plugin-tests to v0.1.1
+- Features: add comprehensive test infrastructure
+  - Add plugin-tests as submodule with PHP/BATS mocks
+  - Add PHPUnit 10 for PHP unit testing
+  - Add PHPStan 2.1 for static analysis
+  - Add Xdebug code coverage support
+  - tests/unit/UtilTest.php - 12 tests for util.php functions
+  - tests/unit/compose.bats - 17 BATS tests for shell scripts
+  - Add GitHub Actions workflow for automated testing
+  - JUnit XML output for test reporting
+  - Coverage reports in Clover format
+  - phpunit.xml with coverage reporting
+  - phpstan.neon ignoring platform-specific functions
+  - composer.json with dev dependencies
+  - .gitignore for vendor/, coverage/, cache/
+  - docs/testing.md with usage guide
+- Features: add operation locking to prevent concurrent stack operations
+  - Two users clicking Start simultaneously
+  - Auto-update running while manual update in progress
+  - Rapid button clicks before previous operation completes
+  - Add file-based locking using flock()
+  - Lock acquired before state-changing operations (up/down/pull/update/stop)
+  - Lock released automatically via trap on EXIT
+  - 30 second timeout waiting for existing lock (COMPOSE_LOCK_TIMEOUT)
+  - Clear user feedback when waiting for lock
+  - Read-only operations (list/ps/logs) don't require lock
+  - acquireStackLock() - acquire lock with timeout
+  - releaseStackLock() - release lock
+  - isStackLocked() - check if stack is locked (for UI)
+  - getStackLastResult() - get last operation result
+  - checkStackLock action - API to check lock status
+  - getStackResult action - API to get last operation result
+- Features (autostart): sequential startup with Docker wait option
+  - Start compose stacks sequentially (one at a time)
+  - Prevents interference between stacks during startup
+  - More predictable and debuggable
+  - Respects startup_priority for ordering (lower = earlier)
+  - Add 'Wait for Docker Autostart' option (AUTOSTART_WAIT_FOR_DOCKER)
+  - When enabled, waits for Docker's autostart containers to stabilize
+  - Useful when compose stacks depend on non-compose containers or you have limited system resources
+  - Monitors for containers with status=created or health=starting
+  - Requires 2 consecutive stable checks before proceeding
+  - Add Docker Wait Timeout setting (AUTOSTART_DOCKER_WAIT_TIMEOUT)
+  - Default 120 seconds, configurable 30-600s
+  - Proceeds with compose startup after timeout (with warning)
+  - Add Stack Startup Timeout setting (AUTOSTART_TIMEOUT)
+  - Default 300 seconds (5 min), configurable 60-900s
+  - Prevents hung stacks from blocking subsequent stacks
+  - Improved logging with progress indicators
+  - Shows [1/N] progress for each stack
+  - Summary at end: succeeded/failed/timed out
+  - Added new toggle: Wait for Docker Autostart
+  - Added new inputs: Docker Wait Timeout, Stack Startup Timeout
+  - Added helpful descriptions for each setting
+- Features (compose.sh): add retry logic, error handling, and result tracking
+  - Add run_with_retry() function for transient failure handling
+  - Retries up to 3 times (configurable via COMPOSE_MAX_RETRIES)
+  - Detects network errors, timeouts, connection refused
+  - 5 second delay between retries (configurable via COMPOSE_RETRY_DELAY)
+  - Add proper error handling for all commands (up, down, pull, update, stop)
+  - Check exit codes after each docker compose command
+  - Log errors to syslog via logger -t compose.manager
+  - Show clear success/failure messages in output
+  - Add save_result() to persist operation status
+  - Writes last_result.json to stack directory
+  - Includes result, exit_code, operation, and timestamp
+  - Enables frontend to check operation outcomes
+  - Improve update command reliability
+  - Abort update if pull fails (don't recreate with old images)
+  - Add progress messages for each phase
+  - Suppress non-fatal errors in image cleanup
+  - Replace raw logger calls with log_msg() helper
+  - Consistent format: [LEVEL] message
+  - Tagged as compose.manager for easy filtering
+- Features (shutdown): improve shutdown handler with timeout and logging
+  - Add timeout protection (SHUTDOWN_TIMEOUT, default 60s)
+  - Prevents hung stacks from blocking system shutdown
+  - Falls back to 'docker compose kill' if graceful stop times out
+  - Add comprehensive logging
+  - Logs to /var/log/compose.manager.log and syslog
+  - Shows start/stop status and duration for each stack
+  - Clear markers for shutdown begin/complete
+  - Stop ALL stacks, not just autostart ones
+  - Previously only stopped stacks with autostart flag
+  - Now properly stops any running compose stack
+  - Keep parallel stop for faster shutdown
+  - Unlike startup, shutdown benefits from parallelism
+  - System shutdown shouldn't wait for sequential stops
+  - Direct docker compose calls (skip wrapper for speed)
+  - Shutdown needs to be fast and simple
+  - Avoids retry logic that could delay shutdown
+- Features (stack): enhance stack creation popup with optional description and improved response
+- Bug Fixes: Use temp directory for DockerUtil JSON tests
+- Bug Fixes: Update PHPStan config to ignore platform-specific code
+  - Lower level to 5 (more practical for legacy Unraid code)
+  - Ignore undefined global variables from defines.php
+  - Ignore missing platform classes (DockerClient, DockerUpdate, DockerUtil)
+  - Ignore untyped parameters/returns in legacy functions
+  - Ignore strict comparison warnings in existing code
+  - Fix PHPDoc @var tag in util.php
+- Bug Fixes: Make lock directory configurable for testing
+  - Add getLockDir() function that checks \['compose_lock_dir']
+  - Falls back to /var/run/compose.manager if not set
+  - Tests now use sys_get_temp_dir() for lock tests
+  - Fixes CI failures on GitHub Actions where /var/run is not writable
+- Bug Fixes (docs): move documentation for Docker Compose profiles support to cleanup main README
+- Bug Fixes (styles): adjust modal overlay z-index and alignment for improved display
+- Bug Fixes (workspace): add workspace configuration for testing and update BATS settings
+- Tests: Add ComposeUtilTest and expand edge case coverage
+  - ComposeUtilTest.php: Tests for compose command building
+  - buildComposeCommandArgs() tests for profiles, override, env paths, indirect
+  - sanitizeStackName() tests for special character handling
+  - formatComposeCommandForOutput() tests
+  - Data provider tests for various compose actions
+  - compose_util_functions.php: Extracted testable functions from compose_util.php
+  - buildComposeCommandArgs() - Builds compose command argument array
+  - formatComposeCommandForOutput() - Formats args for URL params
+  - sanitizeStackName() - Sanitizes input for safe folder names
+  - ExecFunctionsTest.php: Added edge case tests
+  - lscr.io registry (Linuxserver new format)
+  - Registry with port (registry.local:5000)
+  - Deeply nested paths (gcr.io/google-containers/...)
+  - sha256 in tag name vs digest
+  - Empty string handling
+  - Uppercase handling
+  - getElement edge cases
+- Tests: Add comprehensive unit tests for exec.php and util.php functions
+  - Add ExecFunctionsTest.php with 15 tests for getElement() and normalizeImageForUpdateCheck()
+  - Add exec_functions.php with extracted testable functions and DockerUtil mock
+  - Expand UtilTest.php from 12 to 21 tests with:
+  - Stack locking tests (acquireStackLock, releaseStackLock, isStackLocked)
+  - Edge cases for sanitizeStr (empty string, underscores, numbers, multiple special chars)
+- Chores: Update plugin-tests submodule to v0.1.2
+  - DockerUtil: Accurate parseImageTag(), splitImage(), ensureImageTag()
+  - New helper function mocks: _var, my_scale, compress, etc.
+  - DockerTemplates mock class
+- Chores: Update plugin-tests submodule to v0.1.0
+  - VS Code extension with BATS/PHPUnit test runner
+  - Improved PHP mocks with global namespace functions
+  - Fixed duplicate mock logging
+  - CI/CD with release workflow
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.03...v2026.02.03a)
 ###2026.02.03
 - Features (dashboard): enhance uptime display with smart formatting and adjust column widths
 - Features (settings): enhance settings page with toggle switches and improved styling
