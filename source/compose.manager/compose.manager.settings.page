@@ -16,6 +16,8 @@ $ui_patch_help_class = $option_patch_ui ? "hidden" : "inline_help";
 
 $projects_exist = intval(shell_exec("ls -l ".$compose_root." | grep ^d | wc -l")) != 0;
 ?>
+<link type="text/css" rel="stylesheet" href="<?autov('/webGui/styles/jquery.switchbutton.css')?>">
+<script src="<?autov('/webGui/javascript/jquery.switchbutton.js')?>"></script>
 <style>
   <?php
       if ($option_patch_ui)
@@ -23,6 +25,13 @@ $projects_exist = intval(shell_exec("ls -l ".$compose_root." | grep ^d | wc -l")
         echo "dl:nth-last-of-type(2){display:none;}";
       }
   ?>
+  /* Toggle switch overrides for settings page */
+  #compose-tab-settings .switch-button-background {
+    margin: 4px 0 0 0;
+  }
+  #compose-tab-settings .switch-button-label {
+    margin-top: 2px;
+  }
   /* Tab styles */
   .compose-tabs {
     display: flex;
@@ -65,6 +74,53 @@ $projects_exist = intval(shell_exec("ls -l ".$compose_root." | grep ^d | wc -l")
   }
   .compose-tab-content.active {
     display: block;
+  }
+  /* Section headers */
+  #compose-tab-settings h2 {
+    margin: 25px 0 15px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.3);
+    font-size: 1.2em;
+    font-weight: 600;
+    color: inherit;
+  }
+  #compose-tab-settings h2:first-of-type {
+    margin-top: 10px;
+  }
+  /* Button styling */
+  #compose-tab-settings .orange-button {
+    background: linear-gradient(to bottom, #f97316 0%, #ea580c 100%);
+    border: 1px solid #c2410c;
+    color: #fff;
+  }
+  #compose-tab-settings .orange-button:hover {
+    background: linear-gradient(to bottom, #fb923c 0%, #f97316 100%);
+  }
+  #compose-tab-settings .slim-button {
+    padding: 4px 12px;
+    margin-left: 10px;
+  }
+  /* Disabled input styling */
+  #compose-tab-settings input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  /* Improved blockquote help text */
+  #compose-tab-settings blockquote {
+    margin: 5px 0 15px 0;
+    padding: 8px 12px;
+    border-left: 3px solid rgba(128, 128, 128, 0.3);
+    font-size: 0.9em;
+    color: #888;
+  }
+  #compose-tab-settings blockquote p {
+    margin: 0;
+  }
+  #compose-tab-settings blockquote code {
+    background: rgba(128, 128, 128, 0.15);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.95em;
   }
   /* Log viewer styles */
   #compose-log-container {
@@ -110,6 +166,14 @@ $projects_exist = intval(shell_exec("ls -l ".$compose_root." | grep ^d | wc -l")
 var caURL = "/plugins/compose.manager/php/exec.php";
 var logRefreshInterval = null;
 var autoScroll = true;
+
+function toggleHelp(dt) {
+  var dl = dt.closest('dl');
+  var blockquote = dl.querySelector('blockquote.inline_help');
+  if (blockquote) {
+    $(blockquote).slideToggle('fast');
+  }
+}
 
 function patchWebui() {
   $.post(caURL,{action:'patchUI'}, function(data) {
@@ -157,16 +221,45 @@ function checkProjectFolder() {
 }
 
 function toggleAutoCheckInterval() {
-  var autoCheckEnabled = $('#AUTO_CHECK_UPDATES').val() === 'true';
-  if (autoCheckEnabled) {
-    $('#auto_check_interval_row').slideDown();
-  } else {
-    $('#auto_check_interval_row').slideUp();
-  }
+  var autoCheckEnabled = $('#AUTO_CHECK_UPDATES').is(':checked');
+  $('#AUTO_CHECK_UPDATES_DAYS').prop('disabled', !autoCheckEnabled);
 }
 
 $(function() {
   $('#PROJECTS_FOLDER').on("input", null, null, checkProjectFolder);
+  
+  // Initialize toggle switches
+  $('.compose-toggle').switchButton({
+    labels_placement: 'right',
+    on_label: 'YES',
+    off_label: 'NO'
+  });
+  
+  // Handle auto-check toggle state change
+  $('#AUTO_CHECK_UPDATES').change(function() {
+    toggleAutoCheckInterval();
+  });
+  
+  // Convert checkbox values to true/false strings before form submission
+  $('form[name="compose_manager_settings"]').on('submit', function() {
+    $('.compose-toggle').each(function() {
+      var $checkbox = $(this);
+      var name = $checkbox.attr('name');
+      // Remove any existing hidden field for this setting
+      $('input[type="hidden"][name="' + name + '"]').remove();
+      // Determine the value based on the setting type
+      var value;
+      if (name === 'OUTPUTSTYLE') {
+        value = $checkbox.is(':checked') ? 'ttyd' : 'basic';
+      } else {
+        value = $checkbox.is(':checked') ? 'true' : 'false';
+      }
+      // Add hidden field with the appropriate value
+      $checkbox.before('<input type="hidden" name="' + name + '" value="' + value + '">');
+      // Remove name from checkbox so it doesn't submit
+      $checkbox.removeAttr('name');
+    });
+  });
   
   // Tab switching
   $('.compose-tab').on('click', function() {
@@ -320,126 +413,133 @@ function toggleAutoScroll() {
 
 <!-- Settings Tab -->
 <div id="compose-tab-settings" class="compose-tab-content active">
-<form markdown="1" name="compose_manager_settings" method="POST" action="/update.php" target="progressFrame">
+<form name="compose_manager_settings" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="<?=$sName?>/<?=$sName?>.cfg">
+<input type="hidden" name="#section" value="">
 
-_(Compose Project Directory)_:
-: <input type="text" name="PROJECTS_FOLDER" id="PROJECTS_FOLDER" autocomplete="off" spellcheck="false" value="<?=$cfg['PROJECTS_FOLDER']?>" placeholder="_(e.g.)_ /mnt/user/appdata/compose_projects" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" required pattern="^\/(mnt\/.+\/.+)||(\/boot\/config\/plugins\/compose\.manager\/projects)$">
-  <a class='info nohand' id="PROJECTS_FOLDER_WARNING" onclick="HelpButton();return false;" style="display: none;">
-    <i class='fa fa-warning orb yellow-orb'></i>
-    <span style='left:18px'><strong>Projects exist that will not be moved to the new project folder.</strong></span>
-  </a>
+<div class="title"><span class="left"><i class="fa fa-cog icon"></i>_(General Settings)_</span></div>
 
-<blockquote class="inline_help" id="PROJECTS_FOLDER_HELP" style="display: none;">
-  Choose the folder in which compose.manager will store your stacks.<br>
-  <strong>WARNING: Changing this path will not automatically move your existing project folders.</strong>
-</blockquote>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Compose Project Directory)_:</dt>
+  <dd>
+    <input type="text" name="PROJECTS_FOLDER" id="PROJECTS_FOLDER" autocomplete="off" spellcheck="false" value="<?=$cfg['PROJECTS_FOLDER']?>" placeholder="_(e.g.)_ /mnt/user/appdata/compose_projects" data-pickcloseonfile="true" data-pickfilter="img" data-pickroot="/mnt" data-pickfolders="true" required pattern="^\/(mnt\/.+\/.+)||(\/boot\/config\/plugins\/compose\.manager\/projects)$">
+    <a class='info nohand' id="PROJECTS_FOLDER_WARNING" onclick="HelpButton();return false;" style="display: none;">
+      <i class='fa fa-warning orb yellow-orb'></i>
+      <span style='left:18px'><strong>Projects exist that will not be moved to the new project folder.</strong></span>
+    </a>
+    <blockquote class="inline_help">
+    Choose the folder where compose.manager stores your stacks.<br>
+    <strong>Warning:</strong> Changing this path will not automatically move existing project folders.
+    </blockquote>
+  </dd>
+</dl>
 
-_(Compose Command Progress Display)_:
-: <select name="OUTPUTSTYLE">
-  <?=mk_option($cfg['OUTPUTSTYLE'], "basic", _("Basic"))?>
-  <?=mk_option($cfg['OUTPUTSTYLE'], "ttyd", _("Terminal"))?>
-  </select>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Rich Terminal Output)_:</dt>
+  <dd>
+    <input type="checkbox" name="OUTPUTSTYLE" id="OUTPUTSTYLE" class="compose-toggle" <?=$cfg['OUTPUTSTYLE'] == 'ttyd' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Display compose commands in a rich terminal with color output and live progress.<br>
+    When disabled, uses simple text output.
+    </blockquote>
+  </dd>
+</dl>
 
-<blockquote class="inline_help" style="display: none;">
-  Choose the style of output for plugin commands.<br>
-  When set to <strong>basic</strong> the output will be simple text as elsewhere in the webui.<br>
-  When set to <strong>ttyd</strong> the output will be a terminal window with colored text.
-</blockquote>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Recreate During Autostart)_:</dt>
+  <dd>
+    <input type="checkbox" name="AUTOSTART_FORCE_RECREATE" class="compose-toggle" <?=$cfg['AUTOSTART_FORCE_RECREATE'] == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Use <code>--force-recreate</code> when autostarting stacks.<br>
+    Helps when containers fail to start because their attached network no longer exists.
+    </blockquote>
+  </dd>
+</dl>
 
-_(Debug Logging)_:
-: <select name="DEBUG_TO_LOG">
-  <?=mk_option($cfg['DEBUG_TO_LOG'], "false", _("Disabled"))?>
-  <?=mk_option($cfg['DEBUG_TO_LOG'], "true", _("Enabled"))?>
-  </select>
+<div class="title"><span class="left"><i class="fa fa-desktop icon"></i>_(Display Options)_</span></div>
 
-<blockquote class="inline_help" style="display: none;">
-  Enable debug logging.
-</blockquote>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Show Compose in Header Menu)_:</dt>
+  <dd>
+    <input type="checkbox" name="SHOW_COMPOSE_IN_HEADER_MENU" class="compose-toggle" <?=$cfg['SHOW_COMPOSE_IN_HEADER_MENU'] == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Add a Compose tab to the main Unraid header navigation bar for quick access.
+    </blockquote>
+  </dd>
+</dl>
 
-_(Recreate During Autostart)_:
-: <select name="AUTOSTART_FORCE_RECREATE">
-  <?=mk_option($cfg['AUTOSTART_FORCE_RECREATE'], "false", _("Disabled"))?>
-  <?=mk_option($cfg['AUTOSTART_FORCE_RECREATE'], "true", _("Enabled"))?>
-  </select>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Show Dashboard Tile)_:</dt>
+  <dd>
+    <input type="checkbox" name="SHOW_DASHBOARD_TILE" class="compose-toggle" <?=($cfg['SHOW_DASHBOARD_TILE'] ?? 'true') == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Display a Compose Stacks tile on the Dashboard showing stack status at a glance.
+    </blockquote>
+  </dd>
+</dl>
 
-<blockquote class="inline_help" style="display: none;">
-  Use the --force-recreate option when autostarting stacks.<br> 
-  This will recreate each stack container on startup.<br>
-  This can work around an issue where containers refuse to autostart because the 
-  network they are attached to no longer exists.
-</blockquote>
+<div class="title"><span class="left"><i class="fa fa-refresh icon"></i>_(Update Checking)_</span></div>
 
-_(Show Compose in Header Menu)_:
-: <select name="SHOW_COMPOSE_IN_HEADER_MENU">
-  <?=mk_option($cfg['SHOW_COMPOSE_IN_HEADER_MENU'], "false", _("No"))?>
-  <?=mk_option($cfg['SHOW_COMPOSE_IN_HEADER_MENU'], "true", _("Yes"))?>
-  </select>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Auto Check for Updates)_:</dt>
+  <dd>
+    <input type="checkbox" name="AUTO_CHECK_UPDATES" id="AUTO_CHECK_UPDATES" class="compose-toggle" <?=$cfg['AUTO_CHECK_UPDATES'] == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Automatically check for container image updates when the Compose page loads.
+    </blockquote>
+  </dd>
+</dl>
 
-<blockquote class="inline_help">
-  This will move the Compose Manager page to a separate tab in the Unraid Header menu.
-</blockquote>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Auto Check Interval (days))_:</dt>
+  <dd>
+    <input type="number" name="AUTO_CHECK_UPDATES_DAYS" id="AUTO_CHECK_UPDATES_DAYS" min="0.04" max="30" step="0.01" value="<?=$cfg['AUTO_CHECK_UPDATES_DAYS'] ?? '1'?>" style="width:80px;" <?=$cfg['AUTO_CHECK_UPDATES'] != 'true' ? 'disabled' : ''?>>
+    <blockquote class="inline_help">
+    How often to check for updates.<br>
+    Examples: 0.04 (hourly), 1 (daily), 7 (weekly).
+    </blockquote>
+  </dd>
+</dl>
 
-_(Show Dashboard Tile)_:
-: <select name="SHOW_DASHBOARD_TILE">
-  <?=mk_option($cfg['SHOW_DASHBOARD_TILE'] ?? 'true', "true", _("Yes"))?>
-  <?=mk_option($cfg['SHOW_DASHBOARD_TILE'] ?? 'true', "false", _("No"))?>
-  </select>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Clear Update Cache)_:</dt>
+  <dd>
+    <input type="button" value="_(Clear Cache)_" onclick="clearUpdateCache()" class="orange-button">
+    <blockquote class="inline_help">
+    Clear cached update status. Use if update checks show incorrect results.
+    </blockquote>
+  </dd>
+</dl>
 
-<blockquote class="inline_help">
-  Show a Compose Stacks tile on the Unraid dashboard.<br>
-  The tile displays stack status similar to the Docker Containers tile.
-</blockquote>
+<div class="title"><span class="left"><i class="fa fa-wrench icon"></i>_(Advanced)_</span></div>
 
-_(Auto Check for Updates)_:
-: <select name="AUTO_CHECK_UPDATES" id="AUTO_CHECK_UPDATES" onchange="toggleAutoCheckInterval()">
-  <?=mk_option($cfg['AUTO_CHECK_UPDATES'], "false", _("Disabled"))?>
-  <?=mk_option($cfg['AUTO_CHECK_UPDATES'], "true", _("Enabled"))?>
-  </select>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Debug Logging)_:</dt>
+  <dd>
+    <input type="checkbox" name="DEBUG_TO_LOG" id="DEBUG_TO_LOG" class="compose-toggle" <?=$cfg['DEBUG_TO_LOG'] == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Log detailed compose command information to syslog. View logs in the Log tab.
+    </blockquote>
+  </dd>
+</dl>
 
-<blockquote class="inline_help" style="display: none;">
-  Automatically check for container image updates when the Compose page loads.<br>
-  Updates will only be checked if the interval has elapsed since the last check.
-</blockquote>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Patch Docker Page)_:</dt>
+  <dd>
+    <input type="checkbox" name="PATCH_UI" class="compose-toggle" <?=$cfg['PATCH_UI'] == 'true' ? 'checked' : ''?>>
+    <input type=<?=$ui_patch_button_type?> value="_(Patch Now)_" onclick="patchWebui()" class="slim-button" style="margin-left:15px;">
+    <input type=<?=$ui_unpatch_button_type?> value="_(Unpatch)_" onclick="unpatchWebui()" class="slim-button" style="margin-left:15px;">
+    <blockquote class=<?=$ui_patch_help_class?>>
+    <strong>(Unraid 6.11 and earlier only)</strong> Patch the Docker page to better display compose-managed containers.<br>
+    Not needed on Unraid 6.12+ where compose integration is built-in.
+    </blockquote>
+  </dd>
+</dl>
 
-<div id="auto_check_interval_row" style="display: <?=$cfg['AUTO_CHECK_UPDATES'] == 'true' ? 'block' : 'none'?>;">
-_(Auto Check Interval (days))_:
-: <input type="number" name="AUTO_CHECK_UPDATES_DAYS" id="AUTO_CHECK_UPDATES_DAYS" min="0.04" max="30" step="0.01" value="<?=$cfg['AUTO_CHECK_UPDATES_DAYS'] ?? '1'?>" style="width:80px;">
-  <span class="fa fa-question-circle fa-fw" onclick="HelpButton();return false;"></span>
-
-<blockquote class="inline_help" style="display: none;">
-  How often to automatically check for updates (in days).<br>
-  Examples: 0.04 (hourly), 1 (daily), 7 (weekly), 30 (monthly).<br>
-  Minimum: 0.04 days (about 1 hour). Maximum: 30 days.
-</blockquote>
-</div>
-
-_(Clear Update Cache)_:
-: <input type="button" value="_(Clear Cache)_" onclick="clearUpdateCache()">
-
-<blockquote class="inline_help" style="display: none;">
-  Clears the cached update status for all compose containers.<br>
-  Use this if update checks are showing incorrect results or if you want to force a fresh check.<br>
-  After clearing, use "Check for Updates" on the Compose page to recheck all containers.
-</blockquote>
-
-_(Patch unRAID WebUI)_:
-: <select name="PATCH_UI">
-  <?=mk_option($cfg['PATCH_UI'], "false", _("No"))?>
-  <?=mk_option($cfg['PATCH_UI'], "true", _("Yes"))?>
-  </select>
-  <span class="fa fa-question-circle fa-fw" onclick="HelpButton();return false;"></span>
-  <input type=<?=$ui_patch_button_type?> value="_(Patch)_" onclick="patchWebui()">
-  <input type=<?=$ui_unpatch_button_type?> value="_(Unpatch)_" onclick="unpatchWebui()">
-
-<blockquote class=<?=$ui_patch_help_class?> style="display: none;">
-  Apply patches to the webui to improve the integration of containers started by compose.manager.<br>
-  When set to <strong>yes</strong> the patches can be activated with the <strong>Patch</strong> button or by reboot.<br>
-  When set to <strong>no</strong> the patches can be removed with the <strong>Unpatch</strong> button or by reboot.<br>
-</blockquote>
-
-<input type="submit" name="#default" value="_(Default)_">
-: <input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()">
+<dl>
+  <dt>&nbsp;</dt>
+  <dd><input type="submit" name="#default" value="_(Default)_"><input type="submit" name="#apply" value="_(Apply)_" disabled><input type="button" value="_(Done)_" onclick="done()"></dd>
+</dl>
 </form>
 </div>
 
