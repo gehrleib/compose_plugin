@@ -10,4 +10,4 @@ Documentation for the Compose Manager plugin for Unraid.
 
 ## Screenshots
 
-See the main [README](../README.md) for screenshots, or browse the [images folder](../source/compose.manager/images/).
+See the main [README](../README.md) for screenshots, or browse the [images folder](images/).

@@ -21,13 +21,13 @@ The editor provides four tabs for managing your stack:
 | **Env** | Edit environment variables for your stack |
 | **Web UI** | Add Unraid-specific labels for web UI integration |
 
-![Editor - Compose File](../source/compose.manager/images/editor-composeFile.png)
+![Editor - Compose File](images/editor-composeFile.png)
 
-![Editor - Settings](../source/compose.manager/images/editor-settings.png)
+![Editor - Settings](images/editor-settings.png)
 
-![Editor - Env](../source/compose.manager/images/editor-env.png)
+![Editor - Env](images/editor-env.png)
 
-![Editor - Web UI Labels](../source/compose.manager/images/editor-webUI.png)
+![Editor - Web UI Labels](images/editor-webUI.png)
 
 ### Stack Operations
 

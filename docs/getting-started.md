@@ -32,13 +32,13 @@ After installation:
 4. Edit the `docker-compose.yml` file using the built-in editor
 5. Click **Compose Up** to start your stack
 
-![Compose Manager Interface](../source/compose.manager/images/compose.png)
+![Compose Manager Interface](images/compose.png)
 
 ## Dashboard Widget
 
 Compose Manager adds a widget to your Unraid dashboard showing stack status at a glance.
 
-![Dashboard Widget](../source/compose.manager/images/dashboard.png)
+![Dashboard Widget](images/dashboard.png)
 
 ## Next Steps
 
