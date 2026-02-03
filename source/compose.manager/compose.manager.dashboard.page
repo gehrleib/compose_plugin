@@ -59,7 +59,16 @@ EOT;
 EOT;
 }
 
+// Debug setting from config
+$debugEnabled = isset($cfg['DEBUG_TO_LOG']) && $cfg['DEBUG_TO_LOG'] === 'true' ? 'true' : 'false';
+
 // CSS and JavaScript
+$configScript = <<<EOT
+<script>
+window.composeDashDebug = $debugEnabled;
+</script>
+EOT;
+
 $styles = <<<EOT
 <style>
 #compose_dash_content { padding: 4px 0; }
@@ -120,8 +129,17 @@ $script = <<<'EOT'
     var expandedStacks = {};
     var stackContainerCache = {};
     
-    // Stack context menu (similar to Compose tab)
-    function addStackContext(el, stackName, isRunning) {
+    // Debug logging function - respects plugin debug setting
+    function debugLog() {
+        if (window.composeDashDebug) {
+            console.log.apply(console, ['[ComposeDash]'].concat(Array.prototype.slice.call(arguments)));
+        }
+    }
+    
+    // Stack context menu - called onclick like Docker pattern
+    function addStackContext(elementId, stackName, isRunning) {
+        debugLog('addStackContext called:', elementId, stackName, isRunning);
+        
         var opts = [];
         context.settings({right:false, above:false});
         
@@ -146,7 +164,14 @@ $script = <<<'EOT'
             location.href = '/Docker/Compose';
         }});
         
-        context.attach(el, opts);
+        // Destroy and re-attach like Docker pattern
+        context.destroy('#' + elementId);
+        context.attach('#' + elementId, opts);
+        
+        // Debug: Check if dropdown was created
+        var dropdownId = 'dropdown-' + elementId;
+        var $dropdown = $('#' + dropdownId);
+        debugLog('Context menu attached to #' + elementId, 'dropdown exists:', $dropdown.length > 0, 'dropdown HTML:', $dropdown.length ? $dropdown[0].outerHTML.substring(0, 200) : 'N/A');
     }
     
     function stackAction(stackName, action) {
@@ -284,9 +309,10 @@ $script = <<<'EOT'
                     // Uptime
                     var uptimeText = stack.uptime || (state === 'stopped' ? 'stopped' : '');
                     
-                    html += '<div class="compose-dash-stack" onclick="window.composeToggleStack(\'' + stackId + '\', \'' + stack.folder + '\')">';
+                    var escapedFolder = stack.folder.replace(/'/g, "\\'");
+                    html += '<div class="compose-dash-stack" data-stackid="' + stackId + '" data-folder="' + escapedFolder + '">';
                     html += '<i class="fa fa-chevron-right compose-dash-expand" id="compose-dash-exp-' + stackId + '"></i>';
-                    html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '"><img src="' + imgSrc + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
+                    html += '<span class="compose-dash-icon" id="compose-dash-icon-' + stackId + '" onclick="addStackContext(\'compose-dash-icon-' + stackId + '\',\'' + escapedFolder + '\',' + isRunning + ')"><img src="' + imgSrc + '" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\';"></span>';
                     html += '<span class="compose-dash-info">';
                     html += '<div class="compose-dash-name">' + $('<div>').text(stack.name).html() + '</div>';
                     html += '<div class="compose-dash-state ' + stateColor + '"><i class="fa ' + stateIcon + '"></i> ' + stateText + '</div>';
@@ -298,27 +324,32 @@ $script = <<<'EOT'
                     html += '</span>';
                     html += '</div>';
                     html += '<div class="compose-dash-containers" id="compose-dash-ct-' + stackId + '"></div>';
-                    
-                    // Store data for context menu
-                    setTimeout(function() {
-                        var $icon = $('#compose-dash-icon-' + stackId);
-                        $icon.on('click', function(e) {
-                            e.stopPropagation();
-                            addStackContext(this, stack.folder, isRunning);
-                        });
-                    }, 0);
                 });
             }
             
             $('#compose_dash_content').html(html);
+            
+            // Attach row click handlers using event delegation (allows context menu clicks to bubble)
+            $('#compose_dash_content').off('click', '.compose-dash-stack').on('click', '.compose-dash-stack', function(e) {
+                // Don't toggle if clicking on icon (context menu trigger)
+                if ($(e.target).closest('.compose-dash-icon').length) {
+                    return;
+                }
+                var stackId = $(this).data('stackid');
+                var folder = $(this).data('folder');
+                window.composeToggleStack(stackId, folder);
+            });
+            
+            debugLog('Loaded', data.stacks.length, 'stacks, context menus attached via onclick');
         }, 'json').fail(function() {
             $('#compose_stacks_status').text('Stacks -- Error loading');
             $('#compose_dash_content').html('<div class="compose-dash-loading red-text">Failed to load stacks</div>');
         });
     }
     
-    // Expose toggle function globally
+    // Expose functions globally for onclick handlers
     window.composeToggleStack = toggleStack;
+    window.addStackContext = addStackContext;
     
     $(function() {
         loadComposeStacks();
@@ -332,6 +363,7 @@ $mytiles[$pluginname]['column2'] = <<<EOT
 <tr><td>$headerHtml</td></tr>
 <tr class='updated'><td><div id='compose_dash_content'><em>$loadingText</em></div></td></tr>
 </tbody>
+$configScript
 $styles
 $script
 EOT;
