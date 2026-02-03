@@ -1,10 +1,26 @@
 #!/bin/bash
+# Compose Manager - Array Started Event Handler
+# Starts all compose stacks with autostart enabled sequentially
+# Features: priority ordering, logging, timeout protection, Docker wait option
 
 source /usr/local/emhttp/plugins/compose.manager/default.cfg
 source /boot/config/plugins/compose.manager/compose.manager.cfg
 
 COMPOSE_ROOT=$PROJECTS_FOLDER
 COMPOSE_WRAPPER=/usr/local/emhttp/plugins/compose.manager/scripts/compose.sh
+LOG_FILE="/var/log/compose.manager.log"
+
+# Configuration with defaults
+STARTUP_TIMEOUT=${AUTOSTART_TIMEOUT:-300}
+WAIT_FOR_DOCKER=${AUTOSTART_WAIT_FOR_DOCKER:-false}
+DOCKER_WAIT_TIMEOUT=${AUTOSTART_DOCKER_WAIT_TIMEOUT:-120}
+
+# Logging helper
+log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$msg" >> "$LOG_FILE"
+    logger -t "compose.manager" "$1"
+}
 
 sanitize() {
    local s="${1?need a string}"
@@ -14,62 +30,224 @@ sanitize() {
    echo "${s,,}" # convert to lowercase
 }
 
-recreate=""
-if [ "$AUTOSTART_FORCE_RECREATE" = "true" ]; then
-    recreate="--recreate"
+# Wait for Docker autostart containers to finish starting
+wait_for_docker_autostart() {
+    log "Waiting for Docker autostart containers to stabilize..."
+    
+    local waited=0
+    local check_interval=5
+    local stable_count=0
+    local required_stable=2  # Require 2 consecutive stable checks
+    local last_starting=0
+    
+    while [ $waited -lt $DOCKER_WAIT_TIMEOUT ]; do
+        # Count containers that are currently starting (not running/healthy yet)
+        # Look for containers with "starting" in health status or recently created
+        local starting_count=$(docker ps --filter "status=created" --format "{{.ID}}" 2>/dev/null | wc -l)
+        
+        # Also check for containers with health=starting
+        local health_starting=$(docker ps --filter "health=starting" --format "{{.ID}}" 2>/dev/null | wc -l)
+        
+        local total_starting=$((starting_count + health_starting))
+        
+        if [ $total_starting -eq 0 ]; then
+            stable_count=$((stable_count + 1))
+            if [ $stable_count -ge $required_stable ]; then
+                log "Docker containers stabilized after ${waited}s"
+                return 0
+            fi
+        else
+            stable_count=0
+            if [ $total_starting -ne $last_starting ]; then
+                log "Waiting for Docker: $total_starting containers still starting..."
+                last_starting=$total_starting
+            fi
+        fi
+        
+        sleep $check_interval
+        waited=$((waited + check_interval))
+    done
+    
+    log "WARNING: Docker wait timeout after ${DOCKER_WAIT_TIMEOUT}s, proceeding anyway"
+    return 1
+}
+
+# Start a single stack with timeout and logging
+start_stack() {
+    local dir="$1"
+    local stack_name="$2"
+    local sanitized_name="$3"
+    local start_time=$(date +%s)
+    
+    log "Starting stack: $stack_name"
+    
+    # Build command arguments
+    local override=""
+    if [ -f "$dir/docker-compose.override.yml" ]; then
+        override="-f ${dir}/docker-compose.override.yml"
+    fi
+    
+    local envpath=""
+    if [ -f "$dir/envpath" ]; then
+        envpath="-e $(< "$dir/envpath")"
+    fi
+    
+    # Read default profile(s) for autostart
+    local profiles=""
+    if [ -f "$dir/default_profile" ]; then
+        local default_profiles=$(< "$dir/default_profile")
+        IFS=',' read -ra PROFILE_ARRAY <<< "$default_profiles"
+        for p in "${PROFILE_ARRAY[@]}"; do
+            p=$(echo "$p" | xargs)  # trim whitespace
+            if [ -n "$p" ]; then
+                profiles="$profiles -g $p"
+            fi
+        done
+    fi
+    
+    local recreate=""
+    if [ "$AUTOSTART_FORCE_RECREATE" = "true" ]; then
+        recreate="--recreate"
+    fi
+    
+    local debug=""
+    if [ "$DEBUG_TO_LOG" = "true" ]; then
+        debug="--debug"
+    fi
+    
+    # Build the command
+    local cmd=""
+    if [ -f "$dir/indirect" ]; then
+        local indirect=$(< "$dir/indirect")
+        cmd="$COMPOSE_WRAPPER -c up -d '$indirect' -p '$sanitized_name' -s '$dir' $recreate $debug $override $envpath $profiles"
+    else
+        cmd="$COMPOSE_WRAPPER -c up -f '$dir/docker-compose.yml' -p '$sanitized_name' -s '$dir' $recreate $debug $override $envpath $profiles"
+    fi
+    
+    # Execute with timeout, capture output for logging
+    local output
+    local exit_code
+    output=$(timeout $STARTUP_TIMEOUT bash -c "$cmd" 2>&1)
+    exit_code=$?
+    
+    local duration=$(($(date +%s) - start_time))
+    
+    if [ $exit_code -eq 0 ]; then
+        log "Stack $stack_name started successfully in ${duration}s"
+        return 0
+    elif [ $exit_code -eq 124 ]; then
+        log "ERROR: Stack $stack_name startup timed out after ${STARTUP_TIMEOUT}s"
+        return 124
+    else
+        log "ERROR: Stack $stack_name failed to start (exit code: $exit_code)"
+        # Log last few lines of output for debugging
+        echo "$output" | tail -5 | while read line; do
+            [ -n "$line" ] && log "  $stack_name: $line"
+        done
+        return $exit_code
+    fi
+}
+
+# Main execution
+log "=== Compose Manager Autostart Begin ==="
+
+# Optionally wait for Docker autostart containers to complete
+if [ "$WAIT_FOR_DOCKER" = "true" ]; then
+    wait_for_docker_autostart
 fi
 
-debug=""
-if [ "$DEBUG_TO_LOG" = "true" ]; then
-    debug="--debug"
-fi
+# Collect stacks with autostart enabled, sorted by priority
+declare -a stacks_to_start
+declare -A stack_priorities
 
 for dir in $COMPOSE_ROOT/*; do
     if [ -d "$dir" ]; then
         if [ -f "$dir/docker-compose.yml" ] || [ -f "$dir/indirect" ]; then
-            if [ -f "$dir/autostart" ]; then
-                autostart=${dir}/autostart
-                if [ 'true' == "$(< "${autostart}" )" ]; then
-                    name=${dir}/name
-                    name=$(< "${name}")
-                    name=$(sanitize ${name})
-                    override=""
-                    if [ -f "$dir/docker-compose.override.yml" ]; then
-                        override="$dir/docker-compose.override.yml"
-                        override="-f ${override@Q}"
-                    fi
-                    envpath=""
-                    if [ -f "$dir/envpath" ]; then
-                        envpath="$dir/envpath"
-                        envpath="$(< "${envpath}" )"
-                        envpath="-e ${envpath@Q}"
-                    fi
-                    # Read default profile(s) for autostart
-                    profiles=""
-                    if [ -f "$dir/default_profile" ]; then
-                        default_profiles=$(< "$dir/default_profile")
-                        # Support comma-separated profiles
-                        IFS=',' read -ra PROFILE_ARRAY <<< "$default_profiles"
-                        for p in "${PROFILE_ARRAY[@]}"; do
-                            p=$(echo "$p" | xargs)  # trim whitespace
-                            if [ -n "$p" ]; then
-                                profiles="$profiles -g $p"
-                            fi
-                        done
-                    fi
-                    logger "Starting compose stack: ${name}"
-                    if [ -f "$dir/indirect" ]; then
-                        indirect=${dir}/indirect
-                        indirect=$(< "${indirect}")
-                        eval $COMPOSE_WRAPPER -c up -d ${indirect@Q} -p ${name} $recreate $debug $override $envpath $profiles > /dev/null &
-                    else
-                        dir="$dir/docker-compose.yml"
-                        eval $COMPOSE_WRAPPER -c up -f ${dir@Q} -p ${name} $recreate $debug $override $envpath $profiles > /dev/null &
+            if [ -f "$dir/autostart" ] && [ "true" == "$(< "$dir/autostart")" ]; then
+                # Get stack name
+                local_name=""
+                if [ -f "$dir/name" ]; then
+                    local_name=$(< "$dir/name")
+                else
+                    local_name=$(basename "$dir")
+                fi
+                
+                # Get priority (default 50, lower = start earlier)
+                # This can be set via startup_priority file or UI ordering later
+                local priority=50
+                if [ -f "$dir/startup_priority" ]; then
+                    priority=$(< "$dir/startup_priority")
+                    # Validate it's a number
+                    if ! [[ "$priority" =~ ^[0-9]+$ ]]; then
+                        priority=50
                     fi
                 fi
+                
+                stacks_to_start+=("$dir|$local_name")
+                stack_priorities["$dir"]=$priority
             fi
         fi
     fi
 done
 
-wait
+# Sort stacks by priority (lower number = start first)
+IFS=$'\n' sorted_stacks=($(for stack in "${stacks_to_start[@]}"; do
+    dir="${stack%%|*}"
+    echo "${stack_priorities[$dir]}|$stack"
+done | sort -t'|' -k1 -n | cut -d'|' -f2-))
+unset IFS
+
+total_stacks=${#sorted_stacks[@]}
+log "Found $total_stacks stacks with autostart enabled"
+
+if [ $total_stacks -eq 0 ]; then
+    log "=== Compose Manager Autostart Complete (no stacks) ==="
+    exit 0
+fi
+
+# Start stacks sequentially (one at a time for reliability)
+succeeded=0
+failed=0
+timedout=0
+current=0
+
+for stack_entry in "${sorted_stacks[@]}"; do
+    dir="${stack_entry%%|*}"
+    stack_name="${stack_entry#*|}"
+    sanitized_name=$(sanitize "$stack_name")
+    current=$((current + 1))
+    
+    log "[$current/$total_stacks] Processing: $stack_name"
+    
+    # Start stack and wait for it to complete before moving to next
+    start_stack "$dir" "$stack_name" "$sanitized_name"
+    exit_code=$?
+    
+    case $exit_code in
+        0) succeeded=$((succeeded + 1)) ;;
+        124) timedout=$((timedout + 1)) ;;
+        *) failed=$((failed + 1)) ;;
+    esac
+done
+
+log "=== Compose Manager Autostart Complete ==="
+log "Results: $succeeded succeeded, $failed failed, $timedout timed out (of $total_stacks total)"
+
+# Exit with error if any failed (for logging purposes, doesn't affect Unraid)
+if [ $failed -gt 0 ] || [ $timedout -gt 0 ]; then
+    exit 1
+fi
+exit 0
+        esac
+        rm -f "$dir/autostart_result"
+    fi
+done
+
+log "=== Compose Manager Autostart Complete ==="
+log "Results: $succeeded succeeded, $failed failed, $timedout timed out (of $total_stacks total)"
+
+# Exit with error if any failed
+if [ $failed -gt 0 ] || [ $timedout -gt 0 ]; then
+    exit 1
+fi
+exit 0

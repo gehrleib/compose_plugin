@@ -457,6 +457,40 @@ function toggleAutoScroll() {
   </dd>
 </dl>
 
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Wait for Docker Autostart)_:</dt>
+  <dd>
+    <input type="checkbox" name="AUTOSTART_WAIT_FOR_DOCKER" class="compose-toggle" <?=($cfg['AUTOSTART_WAIT_FOR_DOCKER'] ?? 'false') == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Wait for Docker's autostart containers to finish starting before starting compose stacks.<br>
+    Useful if your compose stacks depend on services from non-compose Docker containers.<br>
+    When disabled, compose stacks start in parallel with Docker autostart containers.
+    </blockquote>
+  </dd>
+</dl>
+
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Docker Wait Timeout)_:</dt>
+  <dd>
+    <input type="number" name="AUTOSTART_DOCKER_WAIT_TIMEOUT" min="30" max="600" step="10" value="<?=$cfg['AUTOSTART_DOCKER_WAIT_TIMEOUT'] ?? '120'?>" style="width:80px;"> _(seconds)_
+    <blockquote class="inline_help">
+    Maximum time to wait for Docker autostart containers to stabilize.<br>
+    Only applies when "Wait for Docker Autostart" is enabled.
+    </blockquote>
+  </dd>
+</dl>
+
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Stack Startup Timeout)_:</dt>
+  <dd>
+    <input type="number" name="AUTOSTART_TIMEOUT" min="60" max="900" step="30" value="<?=$cfg['AUTOSTART_TIMEOUT'] ?? '300'?>" style="width:80px;"> _(seconds)_
+    <blockquote class="inline_help">
+    Maximum time to wait for each stack to start during autostart.<br>
+    If a stack takes longer, it will be logged as a timeout and the next stack will start.
+    </blockquote>
+  </dd>
+</dl>
+
 <div class="title"><span class="left"><i class="fa fa-desktop icon"></i>_(Display Options)_</span></div>
 
 <dl>
