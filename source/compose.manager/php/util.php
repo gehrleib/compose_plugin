@@ -25,6 +25,17 @@ function getPath($basePath) {
  * Prevents concurrent operations on the same stack
  */
 
+/** @var string|null Override lock directory for testing */
+$GLOBALS['compose_lock_dir'] = null;
+
+/**
+ * Get the lock directory path
+ * @return string
+ */
+function getLockDir() {
+    return $GLOBALS['compose_lock_dir'] ?? "/var/run/compose.manager";
+}
+
 /**
  * Acquire a lock for a stack operation
  * @param string $stackName The stack name/folder
@@ -32,7 +43,7 @@ function getPath($basePath) {
  * @return resource|false File handle if lock acquired, false otherwise
  */
 function acquireStackLock($stackName, $timeout = 30) {
-    $lockDir = "/var/run/compose.manager";
+    $lockDir = getLockDir();
     if (!is_dir($lockDir)) {
         @mkdir($lockDir, 0755, true);
     }
@@ -82,7 +93,7 @@ function releaseStackLock($fp) {
  * @return array|false Lock info if locked, false if not locked
  */
 function isStackLocked($stackName) {
-    $lockDir = "/var/run/compose.manager";
+    $lockDir = getLockDir();
     $lockFile = "$lockDir/" . sanitizeStr($stackName) . ".lock";
     
     if (!is_file($lockFile)) {
