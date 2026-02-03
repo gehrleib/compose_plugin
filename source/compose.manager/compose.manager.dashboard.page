@@ -340,6 +340,15 @@ $script = <<<'EOT'
                 if ($(e.target).closest('.compose-dash-icon').length) {
                     return;
                 }
+                
+                // Check if any context menu is currently visible
+                var menuOpen = $('.dropdown-context:visible').length > 0;
+                
+                // If menu is open and NOT clicking the expand arrow, just let the menu close
+                if (menuOpen && !$(e.target).closest('.compose-dash-expand').length) {
+                    return;
+                }
+                
                 var stackId = $(this).data('stackid');
                 var folder = $(this).data('folder');
                 window.composeToggleStack(stackId, folder);
