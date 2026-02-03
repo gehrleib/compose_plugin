@@ -28,6 +28,19 @@
 >
 
 <CHANGES>
+###2026.02.03
+- Features (dashboard): enhance uptime display with smart formatting and adjust column widths
+- Features (settings): enhance settings page with toggle switches and improved styling
+- Styles (tabs): improve tab styling with enhanced opacity and transition effects
+- Dashboard tile: add container details, stack runtime tracking, and smart uptime formatting
+  - Add expandable container rows showing: name/status, update status with SHA, image tag, runtime
+  - Add All Stacks/Started only toggle matching Docker tile style
+  - Save stack started_at timestamp on up/update commands for accurate runtime
+  - Smart uptime formatting: minsΓåÆhoursΓåÆdaysΓåÆweeksΓåÆmonthsΓåÆyears based on duration
+  - Rename uptime classes to runtime to avoid Unraid dashboard JS interference
+  - Wider column widths for better readability
+  - Both dashboard tile and Compose tab now use consistent runtime display
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.02d...v2026.02.03)
 ###2026.02.02d
 - Features (ui): enhance dashboard with additional columns for dockers in compose stack
 - Features (ui): add toggle for displaying only started stacks in Compose Manager dashboard tile
