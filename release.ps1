@@ -8,6 +8,8 @@
     to build the package and create a release. Uses date-based versioning (YYYY.MM.DD).
     
     Multiple releases on the same day get suffixes: v2026.02.01, v2026.02.01a, v2026.02.01b
+    
+    Automatically generates release notes from git commits and updates the PLG file.
 
 .PARAMETER DryRun
     Show what would be done without making any changes.
@@ -28,6 +30,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $GitHubRepo = "mstrhakr/compose_plugin"
+$PlgFile = "compose.manager.plg"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -74,10 +77,142 @@ if ($existingTags) {
     $newTag = $baseTag
 }
 
+# Get the last tag for generating changelog
+$lastTag = git describe --tags --abbrev=0 2>$null
+$versionNumber = $newTag -replace '^v', ''
+
 Write-Host ""
 Write-Host "New release tag: " -NoNewline
 Write-Host $newTag -ForegroundColor Green
 Write-Host ""
+
+# Generate release notes from git commits
+Write-Host "Generating release notes..." -ForegroundColor Yellow
+
+if ($lastTag) {
+    Write-Host "  Changes since $lastTag" -ForegroundColor Gray
+    $commitRange = "$lastTag..HEAD"
+} else {
+    Write-Host "  All commits (no previous tag found)" -ForegroundColor Gray
+    $commitRange = "HEAD"
+}
+
+# Get commit messages, filtering out merge commits and formatting
+$commits = git log $commitRange --pretty=format:"%s" --no-merges 2>$null | Where-Object { 
+    # Filter out common noise
+    $_ -and 
+    $_ -notmatch "^Merge " -and
+    $_ -notmatch "^v\d{4}\." -and
+    $_ -notmatch "^Release v" -and
+    $_ -notmatch "^Update changelog" -and
+    $_ -notmatch "^\[skip ci\]"
+}
+
+# Categorize commits by conventional commit type
+$categories = @{
+    'feat' = @{ title = 'Features'; commits = @() }
+    'fix' = @{ title = 'Bug Fixes'; commits = @() }
+    'docs' = @{ title = 'Documentation'; commits = @() }
+    'style' = @{ title = 'Styles'; commits = @() }
+    'refactor' = @{ title = 'Refactoring'; commits = @() }
+    'perf' = @{ title = 'Performance'; commits = @() }
+    'test' = @{ title = 'Tests'; commits = @() }
+    'build' = @{ title = 'Build'; commits = @() }
+    'ci' = @{ title = 'CI/CD'; commits = @() }
+    'chore' = @{ title = 'Chores'; commits = @() }
+    'other' = @{ title = 'Other Changes'; commits = @() }
+}
+
+# Parse each commit
+foreach ($commit in $commits) {
+    if (-not $commit) { continue }
+    
+    # Match conventional commit format: type(scope): message or type: message
+    if ($commit -match '^(\w+)(?:\(([^)]+)\))?:\s*(.+)$') {
+        $type = $matches[1].ToLower()
+        $scope = $matches[2]
+        $message = $matches[3].Trim()
+        
+        # Format message with scope if present
+        if ($scope) {
+            $formattedMsg = "**$scope**: $message"
+        } else {
+            $formattedMsg = $message
+        }
+        
+        # Add to appropriate category
+        if ($categories.ContainsKey($type)) {
+            $categories[$type].commits += $formattedMsg
+        } else {
+            $categories['other'].commits += $formattedMsg
+        }
+    } else {
+        # Non-conventional commit goes to 'other'
+        $categories['other'].commits += $commit.Trim()
+    }
+}
+
+# Build release notes for PLG
+$releaseNotes = @()
+$releaseNotes += "###$versionNumber"
+
+# Output categories in order (only if they have commits)
+$categoryOrder = @('feat', 'fix', 'perf', 'refactor', 'docs', 'style', 'test', 'build', 'ci', 'chore', 'other')
+$hasContent = $false
+
+foreach ($cat in $categoryOrder) {
+    if ($categories[$cat].commits.Count -gt 0) {
+        $hasContent = $true
+        foreach ($msg in $categories[$cat].commits) {
+            $releaseNotes += "- $($categories[$cat].title): $msg"
+        }
+    }
+}
+
+if (-not $hasContent) {
+    $releaseNotes += "- Minor updates and improvements"
+}
+
+# Add link to GitHub comparison
+$releaseNotes += "- [View all changes](https://github.com/$GitHubRepo/compare/$lastTag...$newTag)"
+
+Write-Host ""
+Write-Host "Release notes:" -ForegroundColor Cyan
+$releaseNotes | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+Write-Host ""
+
+# Update PLG file with new release notes
+function Update-PlgChangelog {
+    param (
+        [string]$PlgPath,
+        [string[]]$NewNotes
+    )
+    
+    $content = Get-Content $PlgPath -Raw
+    
+    # Find the <CHANGES> section and insert new notes at the top
+    $changesPattern = '(<CHANGES>\r?\n)'
+    $replacement = "`$1$($NewNotes -join "`n")`n"
+    
+    $newContent = $content -replace $changesPattern, $replacement
+    
+    return $newContent
+}
+
+if (-not $DryRun) {
+    Write-Host "Updating $PlgFile with release notes..." -ForegroundColor Cyan
+    $newPlgContent = Update-PlgChangelog -PlgPath $PlgFile -NewNotes $releaseNotes
+    $newPlgContent | Set-Content $PlgFile -NoNewline
+    
+    # Stage and commit the PLG update
+    git add $PlgFile
+    $commitResult = git commit -m "Update changelog for $newTag" 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Committed changelog update" -ForegroundColor Green
+    } else {
+        Write-Host "  No changes to commit (changelog may already be up to date)" -ForegroundColor Yellow
+    }
+}
 
 # Check for uncommitted changes
 $status = git status --porcelain
@@ -125,8 +260,11 @@ if ($behind -gt 0) {
 if ($DryRun) {
     Write-Host ""
     Write-Host "[DRY RUN] Would execute:" -ForegroundColor Magenta
-    Write-Host "  git tag $newTag" -ForegroundColor Gray
-    Write-Host "  git push origin $newTag" -ForegroundColor Gray
+    Write-Host "  1. Update $PlgFile with release notes" -ForegroundColor Gray
+    Write-Host "  2. git commit -m `"Update changelog for $newTag`"" -ForegroundColor Gray
+    Write-Host "  3. git tag $newTag" -ForegroundColor Gray
+    Write-Host "  4. git push origin $currentBranch" -ForegroundColor Gray
+    Write-Host "  5. git push origin $newTag" -ForegroundColor Gray
     Write-Host ""
     Write-Host "Run without -DryRun to create the release." -ForegroundColor Cyan
     exit 0
