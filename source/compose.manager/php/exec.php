@@ -284,10 +284,31 @@ switch ($_POST['action']) {
         $iconUrlFile = "$compose_root/$script/icon_url";
         $iconUrl = is_file($iconUrlFile) ? trim(file_get_contents($iconUrlFile)) : "";
         
+        // Get WebUI URL (stack-level)
+        $webuiUrlFile = "$compose_root/$script/webui_url";
+        $webuiUrl = is_file($webuiUrlFile) ? trim(file_get_contents($webuiUrlFile)) : "";
+        
+        // Get default profile
+        $defaultProfileFile = "$compose_root/$script/default_profile";
+        $defaultProfile = is_file($defaultProfileFile) ? trim(file_get_contents($defaultProfileFile)) : "";
+        
+        // Get available profiles from the profiles file
+        $profilesFile = "$compose_root/$script/profiles";
+        $availableProfiles = [];
+        if (is_file($profilesFile)) {
+            $profilesData = json_decode(file_get_contents($profilesFile), true);
+            if (is_array($profilesData)) {
+                $availableProfiles = $profilesData;
+            }
+        }
+        
         echo json_encode([
             'result' => 'success',
             'envPath' => $envPath,
-            'iconUrl' => $iconUrl
+            'iconUrl' => $iconUrl,
+            'webuiUrl' => $webuiUrl,
+            'defaultProfile' => $defaultProfile,
+            'availableProfiles' => $availableProfiles
         ]);
         break;
     case 'setStackSettings':
@@ -318,6 +339,29 @@ switch ($_POST['action']) {
                 break;
             }
             file_put_contents($iconUrlFile, $iconUrl);
+        }
+        
+        // Set WebUI URL (stack-level)
+        $webuiUrl = isset($_POST['webuiUrl']) ? trim($_POST['webuiUrl']) : "";
+        $webuiUrlFile = "$compose_root/$script/webui_url";
+        if (empty($webuiUrl)) {
+            if (is_file($webuiUrlFile)) @unlink($webuiUrlFile);
+        } else {
+            // Validate URL
+            if (!filter_var($webuiUrl, FILTER_VALIDATE_URL) || (strpos($webuiUrl, 'http://') !== 0 && strpos($webuiUrl, 'https://') !== 0)) {
+                echo json_encode(['result' => 'error', 'message' => 'Invalid WebUI URL. Must be http:// or https://']);
+                break;
+            }
+            file_put_contents($webuiUrlFile, $webuiUrl);
+        }
+        
+        // Set default profile
+        $defaultProfile = isset($_POST['defaultProfile']) ? trim($_POST['defaultProfile']) : "";
+        $defaultProfileFile = "$compose_root/$script/default_profile";
+        if (empty($defaultProfile)) {
+            if (is_file($defaultProfileFile)) @unlink($defaultProfileFile);
+        } else {
+            file_put_contents($defaultProfileFile, $defaultProfile);
         }
         
         echo json_encode(['result' => 'success', 'message' => 'Settings saved']);

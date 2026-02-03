@@ -208,7 +208,7 @@ function initEditorModal() {
   });
   
   // Initialize settings field change tracking
-  $('#settings-name, #settings-description, #settings-icon-url, #settings-env-path, #settings-default-profile').on('input', function() {
+  $('#settings-name, #settings-description, #settings-icon-url, #settings-webui-url, #settings-env-path, #settings-default-profile').on('input', function() {
     var fieldId = this.id.replace('settings-', '');
     var currentValue = $(this).val();
     var originalValue = editorModal.originalSettings[fieldId] || '';
@@ -735,6 +735,16 @@ function isValidWebUIUrl(url) {
   if (!url) return false;
   var lowerUrl = url.toLowerCase().trim();
   return lowerUrl.startsWith('http://') || lowerUrl.startsWith('https://');
+}
+
+// Process WebUI URL placeholders (like Unraid's Docker WebUI handling)
+function processWebUIUrl(url) {
+  if (!url) return url;
+  // Replace [IP] with the current server hostname/IP
+  url = url.replace(/\[IP\]/gi, window.location.hostname);
+  // Replace [PORT:xxxx] with the specified port (for compatibility with Docker template format)
+  url = url.replace(/\[PORT:(\d+)\]/gi, '$1');
+  return url;
 }
 
 $(function() {
@@ -1980,6 +1990,11 @@ function loadSettingsData(project, projectName) {
           $('#settings-icon-preview').hide();
         }
         
+        // WebUI URL
+        var webuiUrl = response.webuiUrl || '';
+        $('#settings-webui-url').val(webuiUrl);
+        editorModal.originalSettings['webui-url'] = webuiUrl;
+        
         // ENV path
         var envPath = response.envPath || '';
         $('#settings-env-path').val(envPath);
@@ -2002,9 +2017,11 @@ function loadSettingsData(project, projectName) {
     }
   }).fail(function() {
     $('#settings-icon-url').val('');
+    $('#settings-webui-url').val('');
     $('#settings-env-path').val('');
     $('#settings-default-profile').val('');
     editorModal.originalSettings['icon-url'] = '';
+    editorModal.originalSettings['webui-url'] = '';
     editorModal.originalSettings['env-path'] = '';
     editorModal.originalSettings['default-profile'] = '';
     $('#settings-icon-preview').hide();
@@ -2413,20 +2430,23 @@ function saveSettings() {
     );
   }
   
-  // Save icon URL, env path, and default profile if any are modified
-  if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile')) {
+  // Save icon URL, webui URL, env path, and default profile if any are modified
+  if (editorModal.modifiedSettings.has('icon-url') || editorModal.modifiedSettings.has('webui-url') || editorModal.modifiedSettings.has('env-path') || editorModal.modifiedSettings.has('default-profile')) {
     var iconUrl = $('#settings-icon-url').val();
+    var webuiUrl = $('#settings-webui-url').val();
     var envPath = $('#settings-env-path').val();
     var defaultProfile = $('#settings-default-profile').val();
     savePromises.push(
-      $.post(caURL, {action:'setStackSettings', script:project, iconUrl:iconUrl, envPath:envPath, defaultProfile:defaultProfile}).then(function(data) {
+      $.post(caURL, {action:'setStackSettings', script:project, iconUrl:iconUrl, webuiUrl:webuiUrl, envPath:envPath, defaultProfile:defaultProfile}).then(function(data) {
         if (data) {
           var response = JSON.parse(data);
           if (response.result === 'success') {
             editorModal.originalSettings['icon-url'] = iconUrl;
+            editorModal.originalSettings['webui-url'] = webuiUrl;
             editorModal.originalSettings['env-path'] = envPath;
             editorModal.originalSettings['default-profile'] = defaultProfile;
             editorModal.modifiedSettings.delete('icon-url');
+            editorModal.modifiedSettings.delete('webui-url');
             editorModal.modifiedSettings.delete('env-path');
             editorModal.modifiedSettings.delete('default-profile');
             needsReload = true;
@@ -2568,6 +2588,7 @@ function doCloseEditorModal() {
   $('#settings-name').val('');
   $('#settings-description').val('');
   $('#settings-icon-url').val('');
+  $('#settings-webui-url').val('');
   $('#settings-env-path').val('');
   $('#settings-default-profile').val('');
   $('#settings-icon-preview').hide();
@@ -3042,6 +3063,7 @@ function addComposeStackContext(elementId) {
   var $row = $('#stack-row-' + stackId);
   var path = $row.data('path');
   var profiles = $row.data('profiles') || [];
+  var webuiUrl = $row.data('webui') || '';
   
   // Check if updates are available for this stack
   var hasUpdates = false;
@@ -3051,6 +3073,18 @@ function addComposeStackContext(elementId) {
   
   var opts = [];
   context.settings({right: false, above: false});
+  
+  // WebUI link (if configured and stack is running)
+  if (webuiUrl && isUp) {
+    opts.push({text: 'WebUI', icon: 'fa-globe', action: function(e) {
+      e.preventDefault();
+      var url = processWebUIUrl(webuiUrl);
+      if (isValidWebUIUrl(url)) {
+        window.open(url, '_blank');
+      }
+    }});
+    opts.push({divider: true});
+  }
   
   // Compose Up
   opts.push({text: isUp ? 'Compose Up (Recreate)' : 'Compose Up', icon: 'fa-play', action: function(e) {
@@ -3395,6 +3429,17 @@ $(document).on('keydown', '.stack-expand-toggle', function(e) {
               <span>Preview:</span>
               <img id="settings-icon-preview-img" src="" alt="Icon preview" onerror="this.parentElement.style.display='none';">
             </div>
+          </div>
+        </div>
+        
+        <!-- Stack WebUI -->
+        <div class="settings-section">
+          <div class="settings-section-title"><i class="fa fa-globe"></i> Stack WebUI</div>
+          
+          <div class="settings-field">
+            <label for="settings-webui-url">WebUI URL</label>
+            <input type="url" id="settings-webui-url" placeholder="http://[IP]:[PORT]:8080">
+            <div class="settings-field-help">URL to the main WebUI for this stack. This adds a "WebUI" option to the stack's context menu. Supports [IP] and [PORT] placeholders for dynamic replacement.</div>
           </div>
         </div>
         

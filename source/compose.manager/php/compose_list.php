@@ -164,6 +164,15 @@ foreach ($composeProjects as $project) {
     }
   }
 
+  // Check for stack-level WebUI URL
+  $webuiUrl = '';
+  if (is_file("$compose_root/$project/webui_url")) {
+    $webuiUrlTmp = trim(@file_get_contents("$compose_root/$project/webui_url"));
+    if (filter_var($webuiUrlTmp, FILTER_VALIDATE_URL) && (strpos($webuiUrlTmp, 'http://') === 0 || strpos($webuiUrlTmp, 'https://') === 0)) {
+      $webuiUrl = $webuiUrlTmp;
+    }
+  }
+
   $profiles = array();
   if ( is_file("$compose_root/$project/profiles") ) {
     $profilestext = @file_get_contents("$compose_root/$project/profiles");
@@ -239,8 +248,11 @@ foreach ($composeProjects as $project) {
     $stackUptime = "stopped";
   }
 
+  // Escape webui URL for HTML attribute
+  $webuiUrlHtml = htmlspecialchars($webuiUrl, ENT_QUOTES, 'UTF-8');
+
   // Main row - Docker tab structure with expand arrow on left
-  $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson'>";
+  $o .= "<tr class='compose-sortable' id='stack-row-$id' data-project='$projectHtml' data-projectname='$projectNameHtml' data-path='$pathHtml' data-isup='$isup' data-profiles='$profilesJson' data-webui='$webuiUrlHtml'>";
   
   // Name column: expand arrow, then icon with context menu, then name
   $o .= "<td class='ct-name' style='width:220px;padding:8px'>";
