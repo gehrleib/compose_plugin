@@ -7,6 +7,7 @@ Documentation for the Compose Manager plugin for Unraid.
 - [Getting Started](getting-started.md) - Installation and basic setup
 - [User Guide](user-guide.md) - How to use Compose Manager
 - [Configuration](configuration.md) - Settings and options
+- [Profiles](profiles.md) - Docker Compose profiles support
 
 ## Screenshots
 
