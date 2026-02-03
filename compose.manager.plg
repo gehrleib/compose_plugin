@@ -28,6 +28,19 @@
 >
 
 <CHANGES>
+###2026.02.02d
+- Features (ui): enhance dashboard with additional columns for dockers in compose stack
+- Features (ui): add toggle for displaying only started stacks in Compose Manager dashboard tile
+- Features (ui): fix advanced view toggle for standalone and joined tabs
+  - Add fallback for standalone xmenu pages where .tabs element doesn't exist
+  - Create standalone toggle container above the stacks table when no tabs present
+  - Apply view mode to dynamically inserted update column elements
+  - Ensures force update link only shows in advanced view as expected
+- Bug Fixes (logs): correct terminal URLs for container logs and stack logs
+  - Fix container logs in compose_manager_main.php: use openTerminal('docker_logs', containerName) instead of incorrect ('docker', containerName, '.log')
+  - Fix stack logs on dashboard: use AJAX call to compose_util.php instead of non-existent /Docker/ComposeLog page
+  - Fix dashboard container logs: use openDockerTerminal wrapper that properly calls global openTerminal('docker', name, '.log') for logs
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.02c...v2026.02.02d)
 ###2026.02.02c
 - Features (release): Add category grouping with type and scope parsing
   - Group commits by conventional commit type (feat, fix, docs, etc.)
