@@ -6,23 +6,7 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
-
-// Helper function for combo buttons (same as in main file)
-function createComboButton($text, $id, $onClick, $onClickParams, $items) {
-  $o = "";
-  $o .= "<div class='combo-btn-group'>";
-  $o .= "<input type='button' value='$text' class='combo-btn-group-left' id='$id-left-btn' onclick='$onClick($onClickParams);'>";
-  $o .= "<section class='combo-btn-subgroup dropdown'>";
-  $o .= "<button type='button' class='dropdown-toggle combo-btn-group-right' data-toggle='dropdown'><i class='fa fa-caret-down'></i></button>";
-  $o .= "<div class='dropdown-content'>";
-  foreach ( $items as $item ) {
-    $o .= "<a href='#' onclick='$onClick($onClickParams, &quot;$item&quot;);'>$item</a>";
-  }
-  $o .= "</div>";
-  $o .= "</section>";
-  $o .= "</div>";
-  return $o;
-}
+require_once("/usr/local/emhttp/plugins/compose.manager/php/compose_list_functions.php");
 
 // Get stack state
 $stackstate = shell_exec($plugin_root."/scripts/compose.sh -c list");

@@ -1,14 +1,14 @@
 <?php
 
 /**
- * Unit Tests for exec.php functions (REAL SOURCE)
+ * Unit Tests for exec_functions.php (REAL SOURCE)
  * 
- * Tests the actual source functions from source/compose.manager/php/exec.php
- * The file is loaded via includeWithSwitch() to safely bypass the switch($_POST['action']) block.
+ * Tests the actual source functions from source/compose.manager/php/exec_functions.php
  * 
- * exec.php contains these functions:
+ * exec_functions.php contains these functions:
  * - getElement($element) - converts element name to safe HTML ID
  * - normalizeImageForUpdateCheck($image) - normalizes Docker image names for update checking
+ * - sanitizeFolderName($stackName) - sanitizes stack names for folder creation
  */
 
 declare(strict_types=1);
@@ -17,13 +17,13 @@ namespace ComposeManager\Tests;
 
 use PluginTests\TestCase;
 
-// Load the actual source file via stream wrapper using includeWithSwitch()
-// This safely includes exec.php which has a switch($_POST['action']) block
-includeWithSwitch('/usr/local/emhttp/plugins/compose.manager/php/exec.php');
+// Load the actual source functions file directly (no switch statement to bypass)
+require_once '/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php';
 
 /**
  * @covers ::getElement
  * @covers ::normalizeImageForUpdateCheck
+ * @covers ::sanitizeFolderName
  */
 class ExecFunctionsTest extends TestCase
 {

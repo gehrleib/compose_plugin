@@ -2,31 +2,7 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
-
-function getElement($element) {
-    $return = str_replace(".","-",$element);
-    $return = str_replace(" ","",$return);
-    return $return;
-}
-
-/**
- * Normalize Docker image name for update checking.
- * Strips the docker.io/ prefix (docker compose adds this for Docker Hub images)
- * and @sha256: digest suffix, then uses Unraid's DockerUtil::ensureImageTag
- * for consistent normalization matching how Unraid stores update status.
- */
-function normalizeImageForUpdateCheck($image) {
-    // Strip docker.io/ prefix (docker compose adds this for Docker Hub images)
-    if (strpos($image, 'docker.io/') === 0) {
-        $image = substr($image, 10); // Remove 'docker.io/'
-    }
-    // Strip @sha256: digest suffix if present (image pinning)
-    if (($digestPos = strpos($image, '@sha256:')) !== false) {
-        $image = substr($image, 0, $digestPos);
-    }
-    // Use Unraid's normalization for consistent key format (adds library/ prefix for official images, ensures tag)
-    return DockerUtil::ensureImageTag($image);
-}
+require_once("/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php");
 
 switch ($_POST['action']) {
     case 'addStack':

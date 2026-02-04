@@ -1,10 +1,13 @@
 <?php
 
 /**
- * Unit Tests for exec.php Action Handlers
+ * Unit Tests for exec.php Actions (REAL SOURCE)
  * 
  * Tests the AJAX action handlers in source/compose.manager/php/exec.php
- * These are the POST action switch cases that handle stack operations.
+ * Now that functions are in exec_functions.php, we can include exec.php
+ * multiple times to test different actions.
+ * 
+ * Note: Some tests use Linux commands (rm) and are skipped on Windows.
  */
 
 declare(strict_types=1);
@@ -14,12 +17,6 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
 
-/**
- * Tests for exec.php action handlers
- * 
- * The exec.php file uses switch($_POST['action']) to route requests.
- * We test each action by simulating POST data and capturing output.
- */
 class ExecActionsTest extends TestCase
 {
     private string $testComposeRoot;
@@ -35,32 +32,25 @@ class ExecActionsTest extends TestCase
         }
         
         // Set the global compose_root
-        global $compose_root;
+        global $compose_root, $plugin_root, $sName;
         $compose_root = $this->testComposeRoot;
+        $plugin_root = '/usr/local/emhttp/plugins/compose.manager';
+        $sName = 'compose.manager';
         
-        // Also set plugin config
         FunctionMocks::setPluginConfig('compose.manager', [
             'PROJECTS_FOLDER' => $this->testComposeRoot,
-            'DEBUG_TO_LOG' => 'false',
         ]);
     }
 
     protected function tearDown(): void
     {
-        // Clean up test directories
         if (is_dir($this->testComposeRoot)) {
             $this->recursiveDelete($this->testComposeRoot);
         }
-        
-        // Clear POST data
         $_POST = [];
-        
         parent::tearDown();
     }
 
-    /**
-     * Recursively delete a directory
-     */
     private function recursiveDelete(string $dir): void
     {
         if (is_dir($dir)) {
@@ -79,138 +69,43 @@ class ExecActionsTest extends TestCase
     }
 
     /**
-     * Execute an action and return JSON response
-     * 
-     * @param string $action The action to execute
-     * @param array<string, string> $postData Additional POST data
-     * @return array<string, mixed> Decoded JSON response
+     * Execute an action by including the real exec.php with POST data.
      */
-    private function executeAction(string $action, array $postData = []): array
+    private function executeAction(string $action, array $postData = []): string
     {
         global $compose_root, $plugin_root, $sName;
         $compose_root = $this->testComposeRoot;
-        $plugin_root = '/usr/local/emhttp/plugins/compose.manager/';
+        $plugin_root = '/usr/local/emhttp/plugins/compose.manager';
         $sName = 'compose.manager';
         
         $_POST = array_merge(['action' => $action], $postData);
         
         ob_start();
-        
-        // We need to execute the switch case directly since the file is already included
-        // This requires extracting the switch logic or using eval (not ideal)
-        // For now, we'll test the underlying functions instead
-        
-        // Simulate the action execution
-        switch ($action) {
-            case 'changeName':
-                $script = isset($_POST['script']) ? urldecode($_POST['script']) : "";
-                $newName = isset($_POST['newName']) ? urldecode($_POST['newName']) : "";
-                if ($script && $newName) {
-                    $targetDir = "$compose_root/$script";
-                    if (is_dir($targetDir)) {
-                        file_put_contents("$targetDir/name", trim($newName));
-                        echo json_encode(['result' => 'success', 'message' => '']);
-                    } else {
-                        echo json_encode(['result' => 'error', 'message' => 'Stack not found']);
-                    }
-                } else {
-                    echo json_encode(['result' => 'error', 'message' => 'Missing parameters']);
-                }
-                break;
-                
-            case 'changeDesc':
-                $script = isset($_POST['script']) ? urldecode($_POST['script']) : "";
-                $newDesc = isset($_POST['newDesc']) ? urldecode($_POST['newDesc']) : "";
-                if ($script) {
-                    $targetDir = "$compose_root/$script";
-                    if (is_dir($targetDir)) {
-                        file_put_contents("$targetDir/description", trim($newDesc));
-                        echo json_encode(['result' => 'success', 'message' => '']);
-                    } else {
-                        echo json_encode(['result' => 'error', 'message' => 'Stack not found']);
-                    }
-                } else {
-                    echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
-                }
-                break;
-                
-            case 'getDescription':
-                $script = isset($_POST['script']) ? urldecode($_POST['script']) : "";
-                if (!$script) {
-                    echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
-                } else {
-                    $fileName = "$compose_root/$script/description";
-                    $fileContents = is_file($fileName) ? file_get_contents($fileName) : "";
-                    $fileContents = str_replace("\r", "", $fileContents);
-                    echo json_encode(['result' => 'success', 'content' => $fileContents]);
-                }
-                break;
-                
-            case 'updateAutostart':
-                $script = isset($_POST['script']) ? urldecode($_POST['script']) : "";
-                if (!$script) {
-                    echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
-                } else {
-                    $autostart = isset($_POST['autostart']) ? urldecode($_POST['autostart']) : "false";
-                    $fileName = "$compose_root/$script/autostart";
-                    if (is_file($fileName)) {
-                        unlink($fileName);
-                    }
-                    file_put_contents($fileName, $autostart);
-                    echo json_encode(['result' => 'success', 'message' => '']);
-                }
-                break;
-                
-            case 'setEnvPath':
-                $script = isset($_POST['script']) ? urldecode($_POST['script']) : "";
-                if (!$script) {
-                    echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
-                } else {
-                    $fileContent = isset($_POST['envPath']) ? urldecode($_POST['envPath']) : "";
-                    $fileName = "$compose_root/$script/envpath";
-                    if (is_file($fileName)) {
-                        unlink($fileName);
-                    }
-                    if (!empty($fileContent)) {
-                        file_put_contents($fileName, $fileContent);
-                    }
-                    echo json_encode(['result' => 'success', 'message' => '']);
-                }
-                break;
-                
-            case 'getEnvPath':
-                $script = isset($_POST['script']) ? urldecode($_POST['script']) : "";
-                if (!$script) {
-                    echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
-                } else {
-                    $fileName = "$compose_root/$script/envpath";
-                    $fileContents = is_file($fileName) ? file_get_contents($fileName) : "";
-                    $fileContents = str_replace("\r", "", $fileContents);
-                    echo json_encode(['result' => 'success', 'fileName' => $fileName, 'content' => $fileContents]);
-                }
-                break;
-                
-            default:
-                echo json_encode(['result' => 'error', 'message' => 'Unknown action']);
-        }
-        
+        include '/usr/local/emhttp/plugins/compose.manager/php/exec.php';
         $output = ob_get_clean();
         
-        return json_decode($output, true) ?: ['raw' => $output];
+        $_POST = [];
+        
+        return $output ?: '';
     }
 
     /**
      * Create a test stack directory
-     * 
-     * @param string $name Stack folder name
-     * @return string Path to created stack
      */
-    private function createTestStack(string $name): string
+    private function createTestStack(string $name, array $files = []): string
     {
         $stackPath = $this->testComposeRoot . '/' . $name;
         mkdir($stackPath, 0755, true);
-        file_put_contents("$stackPath/docker-compose.yml", "services:\n  web:\n    image: nginx\n");
-        file_put_contents("$stackPath/name", $name);
+        
+        // Create docker-compose.yml by default
+        if (!isset($files['docker-compose.yml'])) {
+            file_put_contents($stackPath . '/docker-compose.yml', "services:\n");
+        }
+        
+        foreach ($files as $filename => $content) {
+            file_put_contents($stackPath . '/' . $filename, $content);
+        }
+        
         return $stackPath;
     }
 
@@ -219,57 +114,37 @@ class ExecActionsTest extends TestCase
     // ===========================================
 
     /**
-     * Test changeName action updates stack name
+     * Test changeName action saves name to file
      */
-    public function testChangeNameSuccess(): void
+    public function testChangeNameSavesNameFile(): void
     {
         $stackPath = $this->createTestStack('test-stack');
         
-        $result = $this->executeAction('changeName', [
+        $output = $this->executeAction('changeName', [
             'script' => urlencode('test-stack'),
-            'newName' => urlencode('New Stack Name'),
+            'newName' => urlencode('My Custom Name'),
         ]);
         
+        $this->assertFileExists($stackPath . '/name');
+        $this->assertEquals('My Custom Name', file_get_contents($stackPath . '/name'));
+        
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
-        $this->assertEquals('New Stack Name', trim(file_get_contents("$stackPath/name")));
     }
 
     /**
-     * Test changeName with missing parameters
-     */
-    public function testChangeNameMissingParams(): void
-    {
-        $result = $this->executeAction('changeName', []);
-        
-        $this->assertEquals('error', $result['result']);
-    }
-
-    /**
-     * Test changeName with non-existent stack
-     */
-    public function testChangeNameStackNotFound(): void
-    {
-        $result = $this->executeAction('changeName', [
-            'script' => urlencode('nonexistent-stack'),
-            'newName' => urlencode('New Name'),
-        ]);
-        
-        $this->assertEquals('error', $result['result']);
-    }
-
-    /**
-     * Test changeName trims whitespace
+     * Test changeName trims whitespace from name
      */
     public function testChangeNameTrimsWhitespace(): void
     {
-        $stackPath = $this->createTestStack('trim-test');
+        $stackPath = $this->createTestStack('test-stack');
         
         $this->executeAction('changeName', [
-            'script' => urlencode('trim-test'),
+            'script' => urlencode('test-stack'),
             'newName' => urlencode('  Trimmed Name  '),
         ]);
         
-        $this->assertEquals('Trimmed Name', file_get_contents("$stackPath/name"));
+        $this->assertEquals('Trimmed Name', file_get_contents($stackPath . '/name'));
     }
 
     // ===========================================
@@ -277,49 +152,22 @@ class ExecActionsTest extends TestCase
     // ===========================================
 
     /**
-     * Test changeDesc action updates stack description
+     * Test changeDesc saves description to file
      */
-    public function testChangeDescSuccess(): void
+    public function testChangeDescSavesDescription(): void
     {
-        $stackPath = $this->createTestStack('desc-test');
+        $stackPath = $this->createTestStack('test-stack');
         
-        $result = $this->executeAction('changeDesc', [
-            'script' => urlencode('desc-test'),
+        $output = $this->executeAction('changeDesc', [
+            'script' => urlencode('test-stack'),
             'newDesc' => urlencode('This is a test description'),
         ]);
         
+        $this->assertFileExists($stackPath . '/description');
+        $this->assertEquals('This is a test description', file_get_contents($stackPath . '/description'));
+        
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
-        $this->assertEquals('This is a test description', file_get_contents("$stackPath/description"));
-    }
-
-    /**
-     * Test changeDesc with empty description
-     */
-    public function testChangeDescEmpty(): void
-    {
-        $stackPath = $this->createTestStack('empty-desc');
-        file_put_contents("$stackPath/description", 'Old description');
-        
-        $result = $this->executeAction('changeDesc', [
-            'script' => urlencode('empty-desc'),
-            'newDesc' => urlencode(''),
-        ]);
-        
-        $this->assertEquals('success', $result['result']);
-        $this->assertEquals('', file_get_contents("$stackPath/description"));
-    }
-
-    /**
-     * Test changeDesc without stack specified
-     */
-    public function testChangeDescMissingStack(): void
-    {
-        $result = $this->executeAction('changeDesc', [
-            'newDesc' => urlencode('Test'),
-        ]);
-        
-        $this->assertEquals('error', $result['result']);
-        $this->assertStringContainsString('not specified', $result['message']);
     }
 
     // ===========================================
@@ -327,17 +175,18 @@ class ExecActionsTest extends TestCase
     // ===========================================
 
     /**
-     * Test getDescription returns existing description
+     * Test getDescription returns file content
      */
-    public function testGetDescriptionSuccess(): void
+    public function testGetDescriptionReturnsContent(): void
     {
-        $stackPath = $this->createTestStack('get-desc');
-        file_put_contents("$stackPath/description", 'Test description content');
+        $stackPath = $this->createTestStack('test-stack');
+        file_put_contents($stackPath . '/description', 'Test description content');
         
-        $result = $this->executeAction('getDescription', [
-            'script' => urlencode('get-desc'),
+        $output = $this->executeAction('getDescription', [
+            'script' => urlencode('test-stack'),
         ]);
         
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals('Test description content', $result['content']);
     }
@@ -345,42 +194,31 @@ class ExecActionsTest extends TestCase
     /**
      * Test getDescription returns empty when no description file
      */
-    public function testGetDescriptionEmpty(): void
+    public function testGetDescriptionEmptyWhenNoFile(): void
     {
-        $this->createTestStack('no-desc');
+        $this->createTestStack('test-stack');
         
-        $result = $this->executeAction('getDescription', [
-            'script' => urlencode('no-desc'),
+        $output = $this->executeAction('getDescription', [
+            'script' => urlencode('test-stack'),
         ]);
         
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals('', $result['content']);
     }
 
     /**
-     * Test getDescription removes carriage returns
+     * Test getDescription error when stack not specified
      */
-    public function testGetDescriptionRemovesCarriageReturns(): void
+    public function testGetDescriptionErrorWhenNoStack(): void
     {
-        $stackPath = $this->createTestStack('crlf-desc');
-        file_put_contents("$stackPath/description", "Line1\r\nLine2\r\n");
-        
-        $result = $this->executeAction('getDescription', [
-            'script' => urlencode('crlf-desc'),
+        $output = $this->executeAction('getDescription', [
+            'script' => '',
         ]);
         
-        $this->assertEquals("Line1\nLine2\n", $result['content']);
-        $this->assertStringNotContainsString("\r", $result['content']);
-    }
-
-    /**
-     * Test getDescription without stack specified
-     */
-    public function testGetDescriptionMissingStack(): void
-    {
-        $result = $this->executeAction('getDescription', []);
-        
+        $result = json_decode($output, true);
         $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('not specified', $result['message']);
     }
 
     // ===========================================
@@ -388,152 +226,399 @@ class ExecActionsTest extends TestCase
     // ===========================================
 
     /**
-     * Test updateAutostart enables autostart
+     * Test updateAutostart creates autostart file
      */
-    public function testUpdateAutostartEnable(): void
+    public function testUpdateAutostartCreatesFile(): void
     {
-        $stackPath = $this->createTestStack('autostart-test');
+        $stackPath = $this->createTestStack('test-stack');
         
-        $result = $this->executeAction('updateAutostart', [
-            'script' => urlencode('autostart-test'),
+        $output = $this->executeAction('updateAutostart', [
+            'script' => urlencode('test-stack'),
             'autostart' => urlencode('true'),
         ]);
         
+        $this->assertFileExists($stackPath . '/autostart');
+        $this->assertEquals('true', file_get_contents($stackPath . '/autostart'));
+        
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
-        $this->assertEquals('true', file_get_contents("$stackPath/autostart"));
     }
 
     /**
-     * Test updateAutostart disables autostart
+     * Test updateAutostart replaces existing file
      */
-    public function testUpdateAutostartDisable(): void
+    public function testUpdateAutostartReplacesExisting(): void
     {
-        $stackPath = $this->createTestStack('autostart-disable');
-        file_put_contents("$stackPath/autostart", 'true');
+        $stackPath = $this->createTestStack('test-stack');
+        file_put_contents($stackPath . '/autostart', 'true');
         
-        $result = $this->executeAction('updateAutostart', [
-            'script' => urlencode('autostart-disable'),
+        $this->executeAction('updateAutostart', [
+            'script' => urlencode('test-stack'),
             'autostart' => urlencode('false'),
         ]);
         
-        $this->assertEquals('success', $result['result']);
-        $this->assertEquals('false', file_get_contents("$stackPath/autostart"));
-    }
-
-    /**
-     * Test updateAutostart defaults to false
-     */
-    public function testUpdateAutostartDefaultsFalse(): void
-    {
-        $stackPath = $this->createTestStack('autostart-default');
-        
-        $result = $this->executeAction('updateAutostart', [
-            'script' => urlencode('autostart-default'),
-        ]);
-        
-        $this->assertEquals('success', $result['result']);
-        $this->assertEquals('false', file_get_contents("$stackPath/autostart"));
-    }
-
-    /**
-     * Test updateAutostart without stack specified
-     */
-    public function testUpdateAutostartMissingStack(): void
-    {
-        $result = $this->executeAction('updateAutostart', [
-            'autostart' => urlencode('true'),
-        ]);
-        
-        $this->assertEquals('error', $result['result']);
+        $this->assertEquals('false', file_get_contents($stackPath . '/autostart'));
     }
 
     // ===========================================
-    // setEnvPath / getEnvPath Action Tests
+    // getYml Action Tests
     // ===========================================
 
     /**
-     * Test setEnvPath sets custom env path
+     * Test getYml returns compose file content
      */
-    public function testSetEnvPathSuccess(): void
+    public function testGetYmlReturnsContent(): void
     {
-        $stackPath = $this->createTestStack('envpath-test');
-        
-        $result = $this->executeAction('setEnvPath', [
-            'script' => urlencode('envpath-test'),
-            'envPath' => urlencode('/custom/path/.env'),
+        $content = "services:\n  web:\n    image: nginx";
+        $this->createTestStack('test-stack', [
+            'docker-compose.yml' => $content,
         ]);
         
+        $output = $this->executeAction('getYml', [
+            'script' => urlencode('test-stack'),
+        ]);
+        
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
-        $this->assertEquals('/custom/path/.env', file_get_contents("$stackPath/envpath"));
+        $this->assertEquals($content, $result['content']);
+    }
+
+    // ===========================================
+    // saveYml Action Tests
+    // ===========================================
+
+    /**
+     * Test saveYml writes compose file
+     */
+    public function testSaveYmlWritesFile(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        
+        $newContent = "services:\n  app:\n    image: alpine";
+        $output = $this->executeAction('saveYml', [
+            'script' => urlencode('test-stack'),
+            'scriptContents' => $newContent,
+        ]);
+        
+        $this->assertEquals($newContent, file_get_contents($stackPath . '/docker-compose.yml'));
+        $this->assertStringContainsString('saved', $output);
+    }
+
+    // ===========================================
+    // getEnv Action Tests
+    // ===========================================
+
+    /**
+     * Test getEnv returns .env file content
+     */
+    public function testGetEnvReturnsContent(): void
+    {
+        $envContent = "VAR1=value1\nVAR2=value2";
+        $stackPath = $this->createTestStack('test-stack');
+        file_put_contents($stackPath . '/.env', $envContent);
+        
+        $output = $this->executeAction('getEnv', [
+            'script' => urlencode('test-stack'),
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertEquals($envContent, $result['content']);
     }
 
     /**
-     * Test setEnvPath removes envpath file when empty
+     * Test getEnv uses custom envpath if set
      */
-    public function testSetEnvPathRemovesWhenEmpty(): void
+    public function testGetEnvUsesCustomEnvPath(): void
     {
-        $stackPath = $this->createTestStack('envpath-remove');
-        file_put_contents("$stackPath/envpath", '/old/path/.env');
+        $stackPath = $this->createTestStack('test-stack');
+        $customEnvPath = $this->testComposeRoot . '/custom.env';
+        file_put_contents($customEnvPath, "CUSTOM_VAR=custom_value");
+        file_put_contents($stackPath . '/envpath', $customEnvPath);
         
-        $result = $this->executeAction('setEnvPath', [
-            'script' => urlencode('envpath-remove'),
-            'envPath' => urlencode(''),
+        $output = $this->executeAction('getEnv', [
+            'script' => urlencode('test-stack'),
         ]);
         
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
-        $this->assertFileDoesNotExist("$stackPath/envpath");
+        $this->assertEquals("CUSTOM_VAR=custom_value", $result['content']);
+    }
+
+    // ===========================================
+    // saveEnv Action Tests
+    // ===========================================
+
+    /**
+     * Test saveEnv writes .env file
+     */
+    public function testSaveEnvWritesFile(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        
+        $envContent = "NEW_VAR=new_value";
+        $output = $this->executeAction('saveEnv', [
+            'script' => urlencode('test-stack'),
+            'scriptContents' => $envContent,
+        ]);
+        
+        $this->assertEquals($envContent, file_get_contents($stackPath . '/.env'));
+        $this->assertStringContainsString('saved', $output);
+    }
+
+    // ===========================================
+    // getOverride Action Tests
+    // ===========================================
+
+    /**
+     * Test getOverride returns override file content
+     */
+    public function testGetOverrideReturnsContent(): void
+    {
+        $overrideContent = "services:\n  web:\n    ports:\n      - '8080:80'";
+        $stackPath = $this->createTestStack('test-stack');
+        file_put_contents($stackPath . '/docker-compose.override.yml', $overrideContent);
+        
+        $output = $this->executeAction('getOverride', [
+            'script' => urlencode('test-stack'),
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertEquals($overrideContent, $result['content']);
     }
 
     /**
-     * Test getEnvPath returns existing path
+     * Test getOverride returns empty when no file
      */
-    public function testGetEnvPathSuccess(): void
+    public function testGetOverrideEmptyWhenNoFile(): void
     {
-        $stackPath = $this->createTestStack('envpath-get');
-        file_put_contents("$stackPath/envpath", '/mnt/user/appdata/.env');
+        $this->createTestStack('test-stack');
         
-        $result = $this->executeAction('getEnvPath', [
-            'script' => urlencode('envpath-get'),
+        $output = $this->executeAction('getOverride', [
+            'script' => urlencode('test-stack'),
         ]);
         
-        $this->assertEquals('success', $result['result']);
-        $this->assertEquals('/mnt/user/appdata/.env', $result['content']);
-    }
-
-    /**
-     * Test getEnvPath returns empty when no envpath file
-     */
-    public function testGetEnvPathEmpty(): void
-    {
-        $this->createTestStack('envpath-empty');
-        
-        $result = $this->executeAction('getEnvPath', [
-            'script' => urlencode('envpath-empty'),
-        ]);
-        
+        $result = json_decode($output, true);
         $this->assertEquals('success', $result['result']);
         $this->assertEquals('', $result['content']);
     }
 
+    // ===========================================
+    // saveOverride Action Tests
+    // ===========================================
+
     /**
-     * Test setEnvPath without stack specified
+     * Test saveOverride writes override file
      */
-    public function testSetEnvPathMissingStack(): void
+    public function testSaveOverrideWritesFile(): void
     {
-        $result = $this->executeAction('setEnvPath', [
-            'envPath' => urlencode('/path'),
+        $stackPath = $this->createTestStack('test-stack');
+        
+        $overrideContent = "services:\n  web:\n    volumes:\n      - ./data:/data";
+        $this->executeAction('saveOverride', [
+            'script' => urlencode('test-stack'),
+            'scriptContents' => $overrideContent,
         ]);
         
-        $this->assertEquals('error', $result['result']);
+        $this->assertEquals($overrideContent, file_get_contents($stackPath . '/docker-compose.override.yml'));
+    }
+
+    // ===========================================
+    // setEnvPath Action Tests  
+    // ===========================================
+
+    /**
+     * Test setEnvPath creates envpath file
+     */
+    public function testSetEnvPathCreatesFile(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        
+        $customPath = '/mnt/user/appdata/custom.env';
+        $output = $this->executeAction('setEnvPath', [
+            'script' => urlencode('test-stack'),
+            'envPath' => urlencode($customPath),
+        ]);
+        
+        $this->assertFileExists($stackPath . '/envpath');
+        $this->assertEquals($customPath, file_get_contents($stackPath . '/envpath'));
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
     }
 
     /**
-     * Test getEnvPath without stack specified
+     * Test setEnvPath removes file when empty (Linux only - uses rm command)
+     * @requires OS Linux
      */
-    public function testGetEnvPathMissingStack(): void
+    public function testSetEnvPathRemovesFileWhenEmpty(): void
     {
-        $result = $this->executeAction('getEnvPath', []);
+        $stackPath = $this->createTestStack('test-stack');
+        file_put_contents($stackPath . '/envpath', '/some/path.env');
         
+        $this->executeAction('setEnvPath', [
+            'script' => urlencode('test-stack'),
+            'envPath' => '',
+        ]);
+        
+        $this->assertFileDoesNotExist($stackPath . '/envpath');
+    }
+
+    // ===========================================
+    // getEnvPath Action Tests
+    // ===========================================
+
+    /**
+     * Test getEnvPath returns envpath content
+     */
+    public function testGetEnvPathReturnsContent(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $customPath = '/mnt/user/appdata/custom.env';
+        file_put_contents($stackPath . '/envpath', $customPath);
+        
+        $output = $this->executeAction('getEnvPath', [
+            'script' => urlencode('test-stack'),
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertEquals($customPath, $result['content']);
+    }
+
+    // ===========================================
+    // deleteStack Action Tests (Linux only - uses rm command)
+    // ===========================================
+
+    /**
+     * Test deleteStack removes stack directory
+     * @requires OS Linux
+     */
+    public function testDeleteStackRemovesDirectory(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        $this->assertDirectoryExists($stackPath);
+        
+        $output = $this->executeAction('deleteStack', [
+            'stackName' => urlencode('test-stack'),
+        ]);
+        
+        $this->assertDirectoryDoesNotExist($stackPath);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+    }
+
+    /**
+     * Test deleteStack returns warning for indirect stacks
+     * @requires OS Linux
+     */
+    public function testDeleteStackWarningForIndirect(): void
+    {
+        $this->createTestStack('test-stack', [
+            'indirect' => '/mnt/user/compose/mystack',
+        ]);
+        
+        $output = $this->executeAction('deleteStack', [
+            'stackName' => urlencode('test-stack'),
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('warning', $result['result']);
+        $this->assertStringContainsString('/mnt/user/compose/mystack', $result['message']);
+    }
+
+    /**
+     * Test deleteStack error when stack not specified
+     */
+    public function testDeleteStackErrorWhenNoStack(): void
+    {
+        $output = $this->executeAction('deleteStack', [
+            'stackName' => '',
+        ]);
+        
+        $result = json_decode($output, true);
         $this->assertEquals('error', $result['result']);
+        $this->assertStringContainsString('not specified', $result['message']);
+    }
+
+    // ===========================================
+    // getStackSettings Action Tests
+    // ===========================================
+
+    /**
+     * Test getStackSettings returns settings data
+     */
+    public function testGetStackSettingsReturnsData(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        file_put_contents($stackPath . '/envpath', '/custom/path.env');
+        file_put_contents($stackPath . '/default_profile', 'production');
+        
+        $output = $this->executeAction('getStackSettings', [
+            'script' => urlencode('test-stack'),
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertArrayHasKey('envPath', $result);
+        $this->assertArrayHasKey('defaultProfile', $result);
+        $this->assertEquals('/custom/path.env', $result['envPath']);
+        $this->assertEquals('production', $result['defaultProfile']);
+    }
+
+    /**
+     * Test getStackSettings error when stack not specified
+     */
+    public function testGetStackSettingsErrorWhenNoStack(): void
+    {
+        $output = $this->executeAction('getStackSettings', [
+            'script' => '',
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('error', $result['result']);
+    }
+
+    // ===========================================
+    // setStackSettings Action Tests
+    // ===========================================
+
+    /**
+     * Test setStackSettings saves settings
+     */
+    public function testSetStackSettingsSavesSettings(): void
+    {
+        $stackPath = $this->createTestStack('test-stack');
+        
+        $output = $this->executeAction('setStackSettings', [
+            'script' => urlencode('test-stack'),
+            'envPath' => urlencode('/new/env/path.env'),
+            'defaultProfile' => urlencode('staging'),
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+    }
+
+    // ===========================================
+    // checkStackLock Action Tests
+    // ===========================================
+
+    /**
+     * Test checkStackLock returns false when no lock
+     */
+    public function testCheckStackLockReturnsFalseWhenNoLock(): void
+    {
+        $this->createTestStack('test-stack');
+        
+        $output = $this->executeAction('checkStackLock', [
+            'script' => urlencode('test-stack'),
+        ]);
+        
+        $result = json_decode($output, true);
+        $this->assertEquals('success', $result['result']);
+        $this->assertFalse($result['locked']);
     }
 }

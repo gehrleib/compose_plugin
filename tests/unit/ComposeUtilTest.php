@@ -3,8 +3,8 @@
 /**
  * Unit Tests for Compose Utility Functions (REAL SOURCE)
  * 
- * Tests the actual source: source/compose.manager/php/compose_util.php
- * The file is loaded via includeWithSwitch() to safely bypass the switch($_POST['action']) block.
+ * Tests the actual source: source/compose.manager/php/compose_util_functions.php
+ * Functions are now in a separate file for testability.
  */
 
 declare(strict_types=1);
@@ -14,9 +14,8 @@ namespace ComposeManager\Tests;
 use PluginTests\TestCase;
 use PluginTests\Mocks\FunctionMocks;
 
-// Load the actual source file via stream wrapper using includeWithSwitch()
-// This safely includes compose_util.php which has a switch($_POST['action']) block
-includeWithSwitch('/usr/local/emhttp/plugins/compose.manager/php/compose_util.php');
+// Load the functions file directly (no switch statement)
+require_once '/usr/local/emhttp/plugins/compose.manager/php/compose_util_functions.php';
 
 /**
  * Tests for compose_util.php functions
