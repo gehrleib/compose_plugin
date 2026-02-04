@@ -239,7 +239,7 @@ function echoComposeCommandMultiple($action, $paths)
         foreach ($commands as $idx => $cmd) {
             $cmdStr = implode(" ", array_map('escapeshellarg', $cmd));
             if (!$first) $bashScript .= " && ";
-            $bashScript .= "echo \"\\n\\n=== Starting: " . addslashes($stackNames[$idx]) . " ===\\n\" && " . $cmdStr;
+            $bashScript .= "echo \"\" && echo \"=== Starting: " . addslashes($stackNames[$idx]) . " ===\" && echo \"\" && " . $cmdStr;
             $first = false;
         }
         $bashScript .= "'";
