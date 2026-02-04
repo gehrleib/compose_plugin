@@ -282,7 +282,7 @@ if (-not $DryRun) {
     
     # Stage and commit the PLG update
     git add $PlgFile
-    $commitResult = git commit -m "Update changelog for $newTag" 2>&1
+    $commitResult = git commit -m "Release $newTag" 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  Committed changelog update" -ForegroundColor Green
     } else {
@@ -337,7 +337,7 @@ if ($DryRun) {
     Write-Host ""
     Write-Host "[DRY RUN] Would execute:" -ForegroundColor Magenta
     Write-Host "  1. Update $PlgFile with release notes" -ForegroundColor Gray
-    Write-Host "  2. git commit -m `"Update changelog for $newTag`"" -ForegroundColor Gray
+    Write-Host "  2. git commit -m `"Release $newTag`"" -ForegroundColor Gray
     Write-Host "  3. git tag $newTag" -ForegroundColor Gray
     Write-Host "  4. git push origin $currentBranch" -ForegroundColor Gray
     Write-Host "  5. git push origin $newTag" -ForegroundColor Gray
