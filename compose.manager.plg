@@ -28,6 +28,12 @@
 >
 
 <CHANGES>
+###2026.02.03c
+- Features: add functionality to recreate containers after label changes
+- Bug Fixes: enhance output formatting for stack command execution
+- Bug Fixes: improve user experience by ensuring modal closes before executing commands
+- Bug Fixes: update commit message to reflect release tagging
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.03b...v2026.02.03c)
 ###2026.02.03b
 - Bug Fixes: Update tests to not depend on shell rm command
 - Refactoring: split functions into separate files for testability
