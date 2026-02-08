@@ -197,10 +197,18 @@ foreach ($composeProjects as $project) {
   $projectIconUrl = htmlspecialchars($projectIcon, ENT_QUOTES, 'UTF-8');
 
   // Status like Docker tab (started/stopped with icon)
-  $shape = $isrunning ? 'play' : 'square';
   $status = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';
+  // Use exclamation icon for partial state so it looks like a warning
+  if ($status === 'partial') {
+    $shape = 'exclamation-circle';
+  } elseif ($isrunning) {
+    $shape = 'play';
+  } else {
+    $shape = 'square';
+  }
   $color = $status == 'started' ? 'green-text' : ($status == 'partial' ? 'orange-text' : 'grey-text');
-  $outerClass = $isrunning ? ($runningCount == $containerCount ? 'started' : 'paused') : 'stopped';
+  // Use 'partial' outer class for partial state to allow correct styling
+  $outerClass = $isrunning ? ($runningCount == $containerCount ? 'started' : 'partial') : 'stopped';
   
   $statusLabel = $status;
   if ($status == 'partial') {
@@ -267,7 +275,8 @@ foreach ($composeProjects as $project) {
   $o .= "<img src='$imgSrc' class='img' onerror=\"this.src='/plugins/dynamix.docker.manager/images/question.png';\">";
   $o .= "</span>";
   $o .= "<span class='inner'><span class='appname'>$projectNameHtml</span><br>";
-  $o .= "<i class='fa fa-$shape $status $color'></i><span class='state'>$statusLabel</span>";
+  // Add data-status attribute to the icon to aid debugging of initial render state
+  $o .= "<i class='fa fa-$shape $status $color compose-status-icon' data-status='$status'></i><span class='state'>$statusLabel</span>";
   // Advanced: show project folder
   $o .= "<div class='advanced' style='margin-top:4px;font-size:0.85em;color:#888;'>";
   $o .= "Project: $projectHtml";
@@ -320,7 +329,7 @@ foreach ($composeProjects as $project) {
   $o .= "<tr class='stack-details-row' id='details-row-$id' style='display:none;'>";
   $o .= "<td colspan='10' class='stack-details-cell' style='padding:0 0 0 60px;background:rgba(0,0,0,0.05);'>";
   $o .= "<div class='stack-details-container' id='details-container-$id' style='padding:8px 16px;'>";
-  $o .= "<i class='fa fa-spinner fa-spin'></i> Loading containers...";
+  $o .= "<i class='fa fa-spinner fa-spin compose-spinner'></i> Loading containers...";
   $o .= "</div>";
   $o .= "</td>";
   $o .= "</tr>";

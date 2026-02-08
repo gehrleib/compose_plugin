@@ -48,5 +48,17 @@ switch ($_POST['action']) {
             echoComposeCommandMultiple('update', $paths);
         }
         break;
+    case 'clientDebug':
+        // Accept lightweight client debug messages and log to syslog for server-side inspection
+        $msg = isset($_POST['msg']) ? $_POST['msg'] : '';
+        $data = isset($_POST['data']) ? $_POST['data'] : '';
+        if ($msg) {
+            // Use logger() from compose_util_functions.php
+            logger("CLIENT_JS: " . $msg . ( $data ? " DATA: " . $data : "" ));
+            echo json_encode(array('status' => 'ok'));
+        } else {
+            echo json_encode(array('status' => 'missing_msg'));
+        }
+        break;
 }
 ?>
