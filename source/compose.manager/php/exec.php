@@ -411,7 +411,8 @@ switch ($_POST['action']) {
         }
         
         // Get container details in JSON format
-        $cmd = "docker compose $files $envFile -p " . escapeshellarg($projectName) . " ps --format json 2>/dev/null";
+        // Include --all so exited/stopped containers are returned as well
+        $cmd = "docker compose $files $envFile -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
         $output = shell_exec($cmd);
         
         $containers = [];
@@ -581,7 +582,8 @@ switch ($_POST['action']) {
         }
         
         // Get container images
-        $cmd = "docker compose $files $envFile -p " . escapeshellarg($projectName) . " ps --format json 2>/dev/null";
+        // Include --all to ensure non-running containers are considered for update checks
+        $cmd = "docker compose $files $envFile -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
         $output = shell_exec($cmd);
         
         $updateResults = [];
@@ -719,7 +721,8 @@ switch ($_POST['action']) {
                 $files .= " -f " . escapeshellarg($overrideFile);
             }
             
-            $cmd = "docker compose $files -p " . escapeshellarg($projectName) . " ps --format json 2>/dev/null";
+            // Include --all so we can detect stacks that have stopped containers
+            $cmd = "docker compose $files -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
             $output = shell_exec($cmd);
             
             $stackUpdates = [];
