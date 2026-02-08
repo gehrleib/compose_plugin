@@ -235,7 +235,26 @@ $(function() {
     on_label: 'YES',
     off_label: 'NO'
   });
-  
+
+  // Handle dashboard tile toggle -> disable/enable hide containers option
+  function toggleHideContainers() {
+    var dashboardTileEnabled = $('#SHOW_DASHBOARD_TILE').is(':checked');
+    var $hide = $('#HIDE_DOCKER_COMPOSE_CONTAINERS');
+    var $wrapper = $hide.closest('dl');
+    if (!dashboardTileEnabled) {
+      if ($hide.is(':checked')) {
+        $hide.prop('checked', false).change();
+      }
+      $wrapper.css({ opacity: 0.4, pointerEvents: 'none' });
+    } else {
+      $wrapper.css({ opacity: 1, pointerEvents: '' });
+    }
+  }
+
+  // Apply on load and on change
+  toggleHideContainers();
+  $('#SHOW_DASHBOARD_TILE').change(toggleHideContainers);
+
   // Handle auto-check toggle state change
   $('#AUTO_CHECK_UPDATES').change(function() {
     toggleAutoCheckInterval();
@@ -506,9 +525,21 @@ function toggleAutoScroll() {
 <dl>
   <dt style="cursor: help;" onclick="toggleHelp(this)">_(Show Dashboard Tile)_:</dt>
   <dd>
-    <input type="checkbox" name="SHOW_DASHBOARD_TILE" class="compose-toggle" <?=($cfg['SHOW_DASHBOARD_TILE'] ?? 'true') == 'true' ? 'checked' : ''?>>
+    <input type="checkbox" name="SHOW_DASHBOARD_TILE" id="SHOW_DASHBOARD_TILE" class="compose-toggle" <?=($cfg['SHOW_DASHBOARD_TILE'] ?? 'true') == 'true' ? 'checked' : ''?>>
     <blockquote class="inline_help">
     Display a Compose Stacks tile on the Dashboard showing stack status at a glance.
+    </blockquote>
+  </dd>
+</dl>
+
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Hide Compose Containers from Docker Tile on Dashboard)_:</dt>
+  <dd>
+    <input type="checkbox" name="HIDE_DOCKER_COMPOSE_CONTAINERS" id="HIDE_DOCKER_COMPOSE_CONTAINERS" class="compose-toggle" <?=($cfg['HIDE_DOCKER_COMPOSE_CONTAINERS'] ?? 'false') == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    Hide containers managed by Compose stacks from Unraid's Docker Containers dashboard tile.<br>
+    This avoids duplicate entries when both the Compose Stacks tile and Docker Containers tile are visible on the Dashboard.<br>
+    This option requires "Show Dashboard Tile" to be enabled.
     </blockquote>
   </dd>
 </dl>
