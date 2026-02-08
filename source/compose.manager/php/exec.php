@@ -505,8 +505,11 @@ switch ($_POST['action']) {
                                     foreach ($updateStatus as $key => $status) {
                                         foreach ($checkNames as $checkName) {
                                             if ($key === $checkName || strpos($key, $checkName) !== false || strpos($checkName, $key) !== false) {
-                                                $container['LocalSha'] = substr($status['local'] ?? '', 0, 8);
-                                                $container['RemoteSha'] = substr($status['remote'] ?? '', 0, 8);
+                                                // Strip sha256: prefix before truncating to 12 hex chars
+                                                $localRaw = $status['local'] ?? '';
+                                                $remoteRaw = $status['remote'] ?? '';
+                                                $container['LocalSha'] = substr(str_replace('sha256:', '', $localRaw), 0, 8);
+                                                $container['RemoteSha'] = substr(str_replace('sha256:', '', $remoteRaw), 0, 8);
                                                 if (!empty($status['local']) && !empty($status['remote'])) {
                                                     $container['UpdateStatus'] = ($status['local'] === $status['remote']) ? 'up-to-date' : 'update-available';
                                                 }
