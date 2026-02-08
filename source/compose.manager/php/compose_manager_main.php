@@ -65,8 +65,15 @@ function composeLoadlist() {
 // Initialize UI components after stack list is loaded
 function initStackListUI() {
   // Initialize autostart switches - scope to compose_list to avoid conflict with Docker tab
-  $('#compose_list .auto_start').switchButton({labels_placement:'right', on_label:"On", off_label:"Off"});
-  $('#compose_list .auto_start').change(function(){
+  // Avoid re-initializing switchButton on elements that may be re-rendered.
+  $('#compose_list .auto_start').each(function() {
+    var $el = $(this);
+    if ($el.data('switchbutton-initialized')) return;
+    $el.switchButton({labels_placement:'right', on_label:"On", off_label:"Off"});
+    $el.data('switchbutton-initialized', true);
+  });
+  // Ensure change handler is bound only once
+  $('#compose_list').off('change', '.auto_start').on('change', '.auto_start', function(){
     var script = $(this).attr("data-scriptname");
     var auto = $(this).prop('checked');
     $.post(caURL, {action:'updateAutostart', script:script, autostart:auto});
@@ -881,13 +888,17 @@ $(function() {
     var standaloneToggle = $('<div class="compose-standalone-toggle" style="text-align:right;margin-bottom:10px;"></div>').html(toggleHtml);
     $('#compose_stacks').before(standaloneToggle);
   }
-  $('.compose-advancedview').switchButton({labels_placement:'left', on_label:'Advanced View', off_label:'Basic View', checked:$.cookie('compose_listview_mode')==='advanced'});
+  // Initialize the Advanced/Basic view toggle and ensure the cookie-driven
+  // state is applied explicitly to avoid label/state mismatches across
+  // different switchButton implementations or placements.
+  $('.compose-advancedview').switchButton({labels_placement:'right', on_label:'Advanced View', off_label:'Basic View', checked:$.cookie('compose_listview_mode')==='advanced'});
+  // Apply the current cookie state immediately to avoid a brief flipped
+  // presentation when the switch widget renders.
+  applyListView();
   $('.compose-advancedview').change(function(){
-    // Use instant toggle to avoid text wrapping issues during animation
-    // Scope to compose_stacks table to avoid affecting Docker tab
-    $('#compose_stacks .advanced').toggle();
-    $('#compose_stacks .basic').toggle();
+    // Persist selection and apply view consistently via applyListView()
     $.cookie('compose_listview_mode', $('.compose-advancedview').is(':checked') ? 'advanced' : 'basic', {expires:3650});
+    applyListView();
   });
   
   // Set up MutationObserver to detect when ebox (progress dialog) closes
