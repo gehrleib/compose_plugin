@@ -441,17 +441,29 @@ $(function() {
   }
   
   // Handle header menu toggle -> disable/enable compose-on-top and hide-from-docker
+  // Saves and restores the original checked state of dependent settings so toggling
+  // the header menu on then off preserves the user's previous selections.
   function toggleComposeOnTop() {
     var headerMenuEnabled = $('#SHOW_COMPOSE_IN_HEADER_MENU').is(':checked');
     var $onTop = $('#SHOW_COMPOSE_ON_TOP');
     var $wrapper = $onTop.closest('dl');
     if (headerMenuEnabled) {
+      // Save current state before disabling
+      if (typeof $onTop.data('saved-state') === 'undefined') {
+        $onTop.data('saved-state', $onTop.is(':checked'));
+      }
       if ($onTop.is(':checked')) {
         $onTop.prop('checked', false).change();
       }
       $wrapper.css({ opacity: 0.4, pointerEvents: 'none' });
     } else {
       $wrapper.css({ opacity: 1, pointerEvents: '' });
+      // Restore previously saved state
+      var saved = $onTop.data('saved-state');
+      if (typeof saved !== 'undefined') {
+        $onTop.prop('checked', saved).change();
+        $onTop.removeData('saved-state');
+      }
     }
     // Also toggle hide-from-docker (only available in non-tabbed mode)
     toggleHideFromDocker();
@@ -463,12 +475,22 @@ $(function() {
     var $hide = $('#HIDE_COMPOSE_FROM_DOCKER');
     var $wrapper = $hide.closest('dl');
     if (headerMenuEnabled) {
+      // Save current state before disabling
+      if (typeof $hide.data('saved-state') === 'undefined') {
+        $hide.data('saved-state', $hide.is(':checked'));
+      }
       if ($hide.is(':checked')) {
         $hide.prop('checked', false).change();
       }
       $wrapper.css({ opacity: 0.4, pointerEvents: 'none' });
     } else {
       $wrapper.css({ opacity: 1, pointerEvents: '' });
+      // Restore previously saved state
+      var saved = $hide.data('saved-state');
+      if (typeof saved !== 'undefined') {
+        $hide.prop('checked', saved).change();
+        $hide.removeData('saved-state');
+      }
     }
   }
 
@@ -1103,7 +1125,7 @@ function browseRestoreArchive() {
 </dl>
 
 <dl>
-  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Show Compose Stacks Above Docker Containers)_:</dt>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Show Compose Stacks Above Docker)_:</dt>
   <dd>
     <input type="checkbox" name="SHOW_COMPOSE_ON_TOP" id="SHOW_COMPOSE_ON_TOP" class="compose-toggle" <?=($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') == 'true' ? 'checked' : ''?>>
     <blockquote class="inline_help">
@@ -1114,7 +1136,7 @@ function browseRestoreArchive() {
 </dl>
 
 <dl>
-  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Hide Compose Containers from Docker Tab)_:</dt>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Hide Compose Containers from Docker)_:</dt>
   <dd>
     <input type="checkbox" name="HIDE_COMPOSE_FROM_DOCKER" id="HIDE_COMPOSE_FROM_DOCKER" class="compose-toggle" <?=($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') == 'true' ? 'checked' : ''?>>
     <blockquote class="inline_help">

@@ -201,24 +201,37 @@
   table-layout: fixed;
   width: 100%;
 }
-/* Column widths — balanced for both basic (5 cols) and advanced (8 cols) views.
-   With table-layout:fixed every column needs an explicit width. */
+/* Column widths — basic view (default): 5 visible columns totalling ~100%.
+   Advanced-only columns (5-7) are hidden via .cm-advanced; their widths only
+   apply when the table has .cm-advanced-view. */
 #compose_stacks th:nth-child(1),
-#compose_stacks td:nth-child(1) { width: 18%; }  /* Stack */
+#compose_stacks td:nth-child(1) { width: 30%; }  /* Stack */
 #compose_stacks th:nth-child(2),
-#compose_stacks td:nth-child(2) { width: 12%; }  /* Update */
+#compose_stacks td:nth-child(2) { width: 20%; }  /* Update */
 #compose_stacks th:nth-child(3),
-#compose_stacks td:nth-child(3) { width: 10%; }  /* Containers */
+#compose_stacks td:nth-child(3) { width: 17%; }  /* Containers */
 #compose_stacks th:nth-child(4),
-#compose_stacks td:nth-child(4) { width: 12%; }  /* Uptime */
-#compose_stacks th:nth-child(5),
-#compose_stacks td:nth-child(5) { width: 15%; }  /* Description (advanced) */
-#compose_stacks th:nth-child(6),
-#compose_stacks td:nth-child(6) { width: 8%; }   /* Compose (advanced) */
-#compose_stacks th:nth-child(7),
-#compose_stacks td:nth-child(7) { width: 18%; }  /* Path (advanced) */
+#compose_stacks td:nth-child(4) { width: 20%; }  /* Uptime */
 #compose_stacks th:nth-child(8),
-#compose_stacks td:nth-child(8) { width: 7%; }   /* Autostart */
+#compose_stacks td:nth-child(8) { width: 13%; }  /* Autostart */
+
+/* Advanced view: all 8 columns visible, totalling 100% */
+#compose_stacks.cm-advanced-view th:nth-child(1),
+#compose_stacks.cm-advanced-view td:nth-child(1) { width: 18%; }  /* Stack */
+#compose_stacks.cm-advanced-view th:nth-child(2),
+#compose_stacks.cm-advanced-view td:nth-child(2) { width: 12%; }  /* Update */
+#compose_stacks.cm-advanced-view th:nth-child(3),
+#compose_stacks.cm-advanced-view td:nth-child(3) { width: 10%; }  /* Containers */
+#compose_stacks.cm-advanced-view th:nth-child(4),
+#compose_stacks.cm-advanced-view td:nth-child(4) { width: 12%; }  /* Uptime */
+#compose_stacks.cm-advanced-view th:nth-child(5),
+#compose_stacks.cm-advanced-view td:nth-child(5) { width: 15%; }  /* Description */
+#compose_stacks.cm-advanced-view th:nth-child(6),
+#compose_stacks.cm-advanced-view td:nth-child(6) { width: 8%; }   /* Compose */
+#compose_stacks.cm-advanced-view th:nth-child(7),
+#compose_stacks.cm-advanced-view td:nth-child(7) { width: 18%; }  /* Path */
+#compose_stacks.cm-advanced-view th:nth-child(8),
+#compose_stacks.cm-advanced-view td:nth-child(8) { width: 7%; }   /* Autostart */
 /* Details row spans full width — override fixed column widths */
 #compose_stacks .stack-details-cell { width: auto !important; }
 
@@ -248,10 +261,18 @@
 }
 
 /* Hide advanced-view columns by default via CSS so they are never visible
-   before JavaScript runs applyListView().  applyListView() uses jQuery
-   .show()/.hide() which set inline styles that override this rule. */
-#compose_stacks .advanced {
+   before JavaScript runs.  Uses compose-specific 'cm-advanced' class to avoid
+   conflict with Docker tab's own '.advanced' toggle.
+   When the table has .cm-advanced-view, the columns are revealed. */
+#compose_stacks .cm-advanced {
   display: none;
+}
+#compose_stacks.cm-advanced-view .cm-advanced {
+  display: table-cell;
+}
+/* Inline elements (e.g. the project folder div inside the stack name cell) */
+#compose_stacks.cm-advanced-view div.cm-advanced {
+  display: block;
 }
 
 /* Keep autostart switch labels on one line inside the table cell.

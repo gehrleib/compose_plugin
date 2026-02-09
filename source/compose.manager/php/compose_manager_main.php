@@ -1007,48 +1007,49 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
     // Apply advanced/basic view based on cookie (used after async load)
     // Scoped to compose_stacks to avoid affecting Docker tab when tabs are joined.
-    // When animate=true (user clicked toggle), run a phased transition:
-    //   Phase 1: fade out departing cells (opacity only, layout preserved)
-    //   Phase 2: swap visibility, animate table height, fade in new cells
-    // When false (page load), instant.
+    // When animate=true (user clicked toggle), run a phased transition.
+    // When false (page load), instant class toggle.
+    // Uses compose-specific 'cm-advanced' / 'cm-advanced-view' classes
+    // so Docker tab's own '.advanced' toggle cannot interfere.
     function applyListView(animate) {
         var advanced = $.cookie('compose_listview_mode') === 'advanced';
         var $table = $('#compose_stacks');
 
         if (animate) {
-            var $toHide = advanced ? $table.find('.basic') : $table.find('.advanced');
-            var $toShow = advanced ? $table.find('.advanced') : $table.find('.basic');
+            var $changing = $table.find('.cm-advanced');
 
-            // Capture starting height
-            var startHeight = $table.outerHeight();
-
-            // Phase 1: Fade out departing elements (opacity only — preserves layout)
-            $toHide.animate({ opacity: 0 }, 300).promise().done(function() {
-                // Phase 2: Swap visibility
-                $toHide.hide().removeAttr('style');
-                $toShow.css('opacity', 0).show();
-
-                // Measure new natural height
+            if (advanced) {
+                // Showing advanced columns: make visible at opacity 0, then fade in
+                var startHeight = $table.outerHeight();
+                $changing.css('opacity', 0);
+                $table.addClass('cm-advanced-view');
                 var endHeight = $table.outerHeight();
 
-                // Animate table height from old to new size
                 $table.css({ height: startHeight, overflow: 'hidden' })
                       .animate({ height: endHeight }, 400);
-
-                // Fade in incoming elements
-                $toShow.animate({ opacity: 1 }, 400).promise().done(function() {
-                    // Clean up all inline styles so CSS owns the steady state
+                $changing.animate({ opacity: 1 }, 400).promise().done(function() {
                     $table.removeAttr('style');
-                    $toShow.removeAttr('style');
+                    $changing.removeAttr('style');
                 });
-            });
+            } else {
+                // Hiding advanced columns: fade out, then remove class
+                var startHeight = $table.outerHeight();
+                $changing.animate({ opacity: 0 }, 300).promise().done(function() {
+                    $table.removeClass('cm-advanced-view');
+                    var endHeight = $table.outerHeight();
+
+                    $table.css({ height: startHeight, overflow: 'hidden' })
+                          .animate({ height: endHeight }, 400, function() {
+                              $table.removeAttr('style');
+                              $changing.removeAttr('style');
+                          });
+                });
+            }
         } else {
             if (advanced) {
-                $table.find('.advanced').show();
-                $table.find('.basic').hide();
+                $table.addClass('cm-advanced-view');
             } else {
-                $table.find('.advanced').hide();
-                $table.find('.basic').show();
+                $table.removeClass('cm-advanced-view');
             }
         }
         // Apply readmore to descriptions — exclude container detail rows to avoid double-application
@@ -4449,9 +4450,9 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 <th>Update</th>
                 <th>Containers</th>
                 <th>Uptime</th>
-                <th class="advanced">Description</th>
-                <th class="advanced">Compose</th>
-                <th class="advanced">Path</th>
+                <th class="cm-advanced">Description</th>
+                <th class="cm-advanced">Compose</th>
+                <th class="cm-advanced">Path</th>
                 <th class="nine">Autostart</th>
             </tr>
         </thead>
@@ -4732,15 +4733,25 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 if ($('.tabs').length) return;
 
                 function getComposeContainerNames() {
-                    // Collect container names from our compose stack detail rows
                     var names = {};
+                    // Primary source: data-containers attribute on stack rows
+                    // (populated by PHP at list-load time — always available)
+                    $('#compose_stacks .compose-sortable[data-containers]').each(function() {
+                        try {
+                            var list = JSON.parse($(this).attr('data-containers') || '[]');
+                            for (var i = 0; i < list.length; i++) {
+                                if (list[i]) names[list[i].toLowerCase()] = true;
+                            }
+                        } catch (e) {}
+                    });
+                    // Fallback: stack detail rows (if any stacks have been expanded)
                     $('#compose_stacks .stack-details-row').each(function() {
                         $(this).find('tr[data-container]').each(function() {
                             var name = $(this).attr('data-container');
                             if (name) names[name.toLowerCase()] = true;
                         });
                     });
-                    // Also collect from stackUpdateStatus if available
+                    // Fallback: stackUpdateStatus (populated after update checks)
                     if (typeof stackUpdateStatus !== 'undefined') {
                         for (var stackName in stackUpdateStatus) {
                             var info = stackUpdateStatus[stackName];
@@ -4764,7 +4775,8 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
                     $dockerTable.find('tr.sortable').each(function() {
                         var $row = $(this);
-                        var rowName = $row.find('td:first .outer .hand span.appname, td:first .inner .hand span.appname').first().text().trim();
+                        // Use a broad selector — just find the appname span anywhere in the first cell
+                        var rowName = $row.find('td:first span.appname').first().text().trim();
                         if (!rowName) rowName = $row.find('td:first').text().trim();
 
                         if (composeNames[rowName.toLowerCase()]) {
