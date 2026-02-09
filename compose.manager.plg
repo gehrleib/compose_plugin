@@ -85,15 +85,16 @@ if [ -f "$patch_script" ]; then
         if [ $patch_ui == 'true' ]; then
             echo ""
             echo "----------------------------------------------------"
-            echo " Applying WebUI Patches..."
+            echo " Applying WebUI Patches because PATCH_UI=true"
             echo "----------------------------------------------------"
             echo ""
             #Remove patchs if already applied
             $patch_script -r
 
             #Apply Patches
-            $patch_script
+            $patch_script apply || true
         fi
+
         # If the 'hide compose from docker' setting is enabled, auto-apply patches now
         if [ "$hide_compose" == 'true' ]; then
             echo ""
@@ -101,6 +102,10 @@ if [ -f "$patch_script" ]; then
             echo " Applying WebUI Patches because HIDE_COMPOSE_FROM_DOCKER=true"
             echo "----------------------------------------------------"
             echo ""
+            #Remove patchs if already applied
+            $patch_script -r
+
+            #Apply Patches
             $patch_script apply || true
         fi
     fi
