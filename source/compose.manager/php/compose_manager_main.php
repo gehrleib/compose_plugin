@@ -157,6 +157,9 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
             // Show buttons now that content is loaded
             $('input[type=button]').show();
+
+            // Notify other features (e.g. hide-from-docker) that compose list is ready
+            $(document).trigger('compose-list-loaded');
         }).fail(function(xhr, status, error) {
             try {
                 composeClientDebug('composeLoadlist:failed', {
@@ -1104,10 +1107,15 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
         if ($(".tabs").length) {
             $(".tabs").append(toggleHtml);
         } else {
-            // Standalone page (xmenu under Tasks) - add toggle before the content area
+            // Standalone page (xmenu under Tasks) - add toggle before the container area
             // Style it to float right above the table for consistent positioning
-            var standaloneToggle = $('<div class="compose-standalone-toggle" style="text-align:right;margin-bottom:10px;"></div>').html(toggleHtml);
-            $('#compose_stacks').before(standaloneToggle);
+            var standaloneToggle = $('<div class="ToggleViewMode"></div>').html(toggleHtml);
+            var $tableWrapper = $('#compose_stacks').closest('.TableContainer');
+            if ($tableWrapper.length) {
+                $tableWrapper.before(standaloneToggle);
+            } else {
+                $('#compose_stacks').before(standaloneToggle);
+            }
         }
         // Initialize the Advanced/Basic view toggle.
         // labels_placement:'left' puts both labels to the left of the slider.
@@ -4443,6 +4451,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
     </div>
 
     <span class='tipsterallowed' hidden></span>
+    <div class="TableContainer">
     <table id="compose_stacks" class="tablesorter shift">
         <thead>
             <tr>
@@ -4462,6 +4471,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             </tr>
         </tbody>
     </table>
+    </div>
     <span class='tipsterallowed' hidden>
         <input type='button' value='Add New Stack' onclick='addStack();'>
         <input type='button' value='Start All' onclick='startAllStacks();' id='startAllBtn'>
@@ -4686,12 +4696,18 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
     <script>
         // Initialize editor modal after DOM is fully loaded
         $(function() {
-            updateModalOffset();
-            $(window).on('resize', updateModalOffset);
-            initEditorModal();
+            try {
+                updateModalOffset();
+                $(window).on('resize', updateModalOffset);
+                initEditorModal();
+            } catch (e) {
+                console.warn('Compose Manager: editor init error (non-fatal):', e);
+            }
+        });
 
-            // Reorder Compose section above Docker Containers if configured
-            // Only applies in non-tabbed mode (when pages are flat siblings under .content)
+        // Reorder Compose section above Docker Containers if configured
+        // Runs in its own $(function) to avoid being blocked by editor init errors
+        $(function() {
             (function reorderComposeAboveDocker() {
                 if (!showComposeOnTop) return;
                 // In tabbed mode the sections live in separate tabs; reordering is not applicable
@@ -4701,15 +4717,19 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 if (!$content.length) return;
 
                 // Locate the two title divs by their text content
+                // Use find() with a filter instead of children() to handle any nesting edge-cases
                 var $dockerTitle = null;
                 var $composeTitle = null;
                 $content.children('div.title').each(function() {
                     var txt = $(this).text().trim();
                     if (!$dockerTitle && /Docker\s*Containers/i.test(txt)) $dockerTitle = $(this);
-                    if (!$composeTitle && /^Compose$/i.test(txt)) $composeTitle = $(this);
+                    if (!$composeTitle && /Compose/i.test(txt) && !/Docker/i.test(txt)) $composeTitle = $(this);
                 });
 
-                if (!$dockerTitle || !$composeTitle) return;
+                if (!$dockerTitle || !$composeTitle) {
+                    console.warn('Compose Manager: reorder skipped — dockerTitle:', !!$dockerTitle, 'composeTitle:', !!$composeTitle);
+                    return;
+                }
 
                 // Collect all nodes from the Compose title to the end of .content
                 var composeNodes = [];
@@ -4724,9 +4744,11 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     $content[0].insertBefore(node, $dockerTitle[0]);
                 });
             })();
+        });
 
-            // Hide compose-managed containers from Docker Containers table if configured
-            // Only applies in non-tabbed mode (when pages are flat siblings under .content)
+        // Hide compose-managed containers from Docker Containers table if configured
+        // Runs in its own $(function) to avoid being blocked by other init errors
+        $(function() {
             (function hideComposeContainersFromDocker() {
                 if (!hideComposeFromDocker) return;
                 // In tabbed mode this doesn't make sense
@@ -4787,19 +4809,27 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     });
                 }
 
-                // Run after Docker table loads and when compose list finishes loading
-                $(function() {
-                    // Initial run after compose stacks have loaded
-                    setTimeout(doHide, 2000);
-                    // Re-run whenever compose list reloads
-                    $(document).on('compose-list-loaded', doHide);
-                    // Watch for Docker table changes
+                // Re-run whenever compose list reloads (event fired by composeLoadlist)
+                $(document).on('compose-list-loaded', doHide);
+
+                // Watch for Docker table changes (rows load asynchronously via AJAX)
+                // Use polling until #docker_list exists, then attach MutationObserver
+                function attachDockerObserver() {
                     var dockerTable = document.getElementById('docker_list');
                     if (dockerTable) {
                         var obs = new MutationObserver(function() { setTimeout(doHide, 300); });
                         obs.observe(dockerTable, { childList: true, subtree: true });
+                        // Initial run now that docker table exists
+                        setTimeout(doHide, 500);
+                    } else {
+                        // docker_list not in DOM yet — retry
+                        setTimeout(attachDockerObserver, 500);
                     }
-                });
+                }
+                attachDockerObserver();
+
+                // Also run after a generous delay as final fallback
+                setTimeout(doHide, 4000);
             })();
         });
     </script>
