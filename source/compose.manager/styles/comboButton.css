@@ -201,18 +201,24 @@
   table-layout: fixed;
   width: 100%;
 }
-/* Basic view column widths (5 visible columns) */
+/* Column widths — balanced for both basic (5 cols) and advanced (8 cols) views.
+   With table-layout:fixed every column needs an explicit width. */
 #compose_stacks th:nth-child(1),
-#compose_stacks td:nth-child(1) { width: 25%; }  /* Stack */
+#compose_stacks td:nth-child(1) { width: 18%; }  /* Stack */
 #compose_stacks th:nth-child(2),
-#compose_stacks td:nth-child(2) { width: 15%; }  /* Update */
+#compose_stacks td:nth-child(2) { width: 12%; }  /* Update */
 #compose_stacks th:nth-child(3),
-#compose_stacks td:nth-child(3) { width: 15%; }  /* Containers */
+#compose_stacks td:nth-child(3) { width: 10%; }  /* Containers */
 #compose_stacks th:nth-child(4),
-#compose_stacks td:nth-child(4) { width: 15%; }  /* Uptime */
-/* Advanced columns get auto width when shown */
+#compose_stacks td:nth-child(4) { width: 12%; }  /* Uptime */
+#compose_stacks th:nth-child(5),
+#compose_stacks td:nth-child(5) { width: 15%; }  /* Description (advanced) */
+#compose_stacks th:nth-child(6),
+#compose_stacks td:nth-child(6) { width: 8%; }   /* Compose (advanced) */
+#compose_stacks th:nth-child(7),
+#compose_stacks td:nth-child(7) { width: 18%; }  /* Path (advanced) */
 #compose_stacks th:nth-child(8),
-#compose_stacks td:nth-child(8) { width: 80px; } /* Autostart */
+#compose_stacks td:nth-child(8) { width: 7%; }   /* Autostart */
 /* Details row spans full width — override fixed column widths */
 #compose_stacks .stack-details-cell { width: auto !important; }
 

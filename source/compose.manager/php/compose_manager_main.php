@@ -13,6 +13,7 @@ $cfg = parse_plugin_cfg($sName);
 $autoCheckUpdates = ($cfg['AUTO_CHECK_UPDATES'] ?? 'false') === 'true';
 $autoCheckDays = floatval($cfg['AUTO_CHECK_UPDATES_DAYS'] ?? '1');
 $showComposeOnTop = ($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') === 'true';
+$hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true';
 
 // Note: Stack list is now loaded asynchronously via compose_list.php
 // This improves page load time by deferring expensive docker commands
@@ -33,6 +34,7 @@ $showComposeOnTop = ($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') === 'true';
     var autoCheckUpdates = <?php echo json_encode($autoCheckUpdates); ?>;
     var autoCheckDays = <?php echo json_encode($autoCheckDays); ?>;
     var showComposeOnTop = <?php echo json_encode($showComposeOnTop); ?>;
+    var hideComposeFromDocker = <?php echo json_encode($hideComposeFromDocker); ?>;
 
     // Timers for async operations (plugin-specific to avoid collision with Unraid's global timers)
     var composeTimers = {};
@@ -4719,6 +4721,72 @@ $showComposeOnTop = ($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') === 'true';
                 // Move them before the Docker title
                 composeNodes.forEach(function(node) {
                     $content[0].insertBefore(node, $dockerTitle[0]);
+                });
+            })();
+
+            // Hide compose-managed containers from Docker Containers table if configured
+            // Only applies in non-tabbed mode (when pages are flat siblings under .content)
+            (function hideComposeContainersFromDocker() {
+                if (!hideComposeFromDocker) return;
+                // In tabbed mode this doesn't make sense
+                if ($('.tabs').length) return;
+
+                function getComposeContainerNames() {
+                    // Collect container names from our compose stack detail rows
+                    var names = {};
+                    $('#compose_stacks .stack-details-row').each(function() {
+                        $(this).find('tr[data-container]').each(function() {
+                            var name = $(this).attr('data-container');
+                            if (name) names[name.toLowerCase()] = true;
+                        });
+                    });
+                    // Also collect from stackUpdateStatus if available
+                    if (typeof stackUpdateStatus !== 'undefined') {
+                        for (var stackName in stackUpdateStatus) {
+                            var info = stackUpdateStatus[stackName];
+                            if (info.containers) {
+                                for (var i = 0; i < info.containers.length; i++) {
+                                    var n = info.containers[i].name;
+                                    if (n) names[n.toLowerCase()] = true;
+                                }
+                            }
+                        }
+                    }
+                    return names;
+                }
+
+                function doHide() {
+                    var $dockerTable = $('#docker_list');
+                    if (!$dockerTable.length) return;
+
+                    var composeNames = getComposeContainerNames();
+                    if (Object.keys(composeNames).length === 0) return;
+
+                    $dockerTable.find('tr.sortable').each(function() {
+                        var $row = $(this);
+                        var rowName = $row.find('td:first .outer .hand span.appname, td:first .inner .hand span.appname').first().text().trim();
+                        if (!rowName) rowName = $row.find('td:first').text().trim();
+
+                        if (composeNames[rowName.toLowerCase()]) {
+                            $row.hide();
+                            // Also hide associated child/readmore rows
+                            $row.nextUntil('tr.sortable').hide();
+                        }
+                    });
+                }
+
+                // Run after Docker table loads and when compose list finishes loading
+                $(function() {
+                    // Initial run after compose stacks have loaded
+                    setTimeout(doHide, 2000);
+                    // Re-run whenever compose list reloads
+                    $(document).on('compose-list-loaded', doHide);
+                    // Watch for Docker table changes
+                    var dockerTable = document.getElementById('docker_list');
+                    if (dockerTable) {
+                        var obs = new MutationObserver(function() { setTimeout(doHide, 300); });
+                        obs.observe(dockerTable, { childList: true, subtree: true });
+                    }
                 });
             })();
         });

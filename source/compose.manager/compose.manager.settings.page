@@ -440,15 +440,31 @@ $(function() {
     $('.compose-toggle[name="PATCH_UI"]').prop('disabled', true);
   }
   
-  // Handle header menu toggle -> disable/enable compose-on-top
+  // Handle header menu toggle -> disable/enable compose-on-top and hide-from-docker
   function toggleComposeOnTop() {
     var headerMenuEnabled = $('#SHOW_COMPOSE_IN_HEADER_MENU').is(':checked');
     var $onTop = $('#SHOW_COMPOSE_ON_TOP');
     var $wrapper = $onTop.closest('dl');
     if (headerMenuEnabled) {
-      // Uncheck first, then grey out
       if ($onTop.is(':checked')) {
         $onTop.prop('checked', false).change();
+      }
+      $wrapper.css({ opacity: 0.4, pointerEvents: 'none' });
+    } else {
+      $wrapper.css({ opacity: 1, pointerEvents: '' });
+    }
+    // Also toggle hide-from-docker (only available in non-tabbed mode)
+    toggleHideFromDocker();
+  }
+
+  // Handle header menu toggle -> disable/enable hide compose from docker tab
+  function toggleHideFromDocker() {
+    var headerMenuEnabled = $('#SHOW_COMPOSE_IN_HEADER_MENU').is(':checked');
+    var $hide = $('#HIDE_COMPOSE_FROM_DOCKER');
+    var $wrapper = $hide.closest('dl');
+    if (headerMenuEnabled) {
+      if ($hide.is(':checked')) {
+        $hide.prop('checked', false).change();
       }
       $wrapper.css({ opacity: 0.4, pointerEvents: 'none' });
     } else {
@@ -1092,6 +1108,18 @@ function browseRestoreArchive() {
     <input type="checkbox" name="SHOW_COMPOSE_ON_TOP" id="SHOW_COMPOSE_ON_TOP" class="compose-toggle" <?=($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') == 'true' ? 'checked' : ''?>>
     <blockquote class="inline_help">
     When the Docker page is displayed without tabs, move the Compose Stacks section above the built-in Docker Containers section.<br>
+    This option is only available when "Show Compose in Header Menu" is set to No (non-tabbed mode).
+    </blockquote>
+  </dd>
+</dl>
+
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Hide Compose Containers from Docker Tab)_:</dt>
+  <dd>
+    <input type="checkbox" name="HIDE_COMPOSE_FROM_DOCKER" id="HIDE_COMPOSE_FROM_DOCKER" class="compose-toggle" <?=($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') == 'true' ? 'checked' : ''?>>
+    <blockquote class="inline_help">
+    When enabled, containers managed by Compose stacks will be hidden from the Docker Containers table on the Docker tab.<br>
+    This avoids duplicate display when Compose stacks are shown on the same page.<br>
     This option is only available when "Show Compose in Header Menu" is set to No (non-tabbed mode).
     </blockquote>
   </dd>
