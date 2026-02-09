@@ -196,10 +196,19 @@
   color: #ccc !important;
 }
 
-/* Parent stack table: use auto layout to match Docker's native table styling.
-   The expanded detail rows use colspan and won't affect column widths. */
+/* Parent stack table: use fixed layout so columns stay stable when
+   expanding/collapsing detail rows (their colspan row doesn't affect widths).
+   Column widths are set via inline styles on <th> elements – the CSS below
+   only provides structural rules. */
 #compose_stacks {
   width: 100%;
+  table-layout: fixed;
+}
+
+/* Center the "Containers" column (3rd column) */
+#compose_stacks thead th:nth-child(3),
+#compose_stacks tbody td:nth-child(3) {
+  text-align: center;
 }
 /* Details row spans full width */
 #compose_stacks .stack-details-cell { width: auto !important; }

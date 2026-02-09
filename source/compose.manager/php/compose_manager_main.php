@@ -214,19 +214,28 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
         // Apply current view mode (advanced/basic) - scope to compose_stacks
         var advanced = $.cookie('compose_listview_mode') === 'advanced';
         if (advanced) {
-            $('#compose_stacks .advanced').show();
-            $('#compose_stacks .basic').hide();
+            $('#compose_stacks .cm-advanced').show();
+            $('#compose_stacks .cm-basic').hide();
         } else {
-            $('#compose_stacks .advanced').hide();
-            $('#compose_stacks .basic').show();
+            $('#compose_stacks .cm-advanced').hide();
+            $('#compose_stacks .cm-basic').show();
         }
 
         // Load saved update status after list is loaded
         loadSavedUpdateStatus();
     }
 
-    $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', '<? autov("/plugins/compose.manager/styles/comboButton.css"); ?>'));
-    $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', '<? autov("/plugins/compose.manager/styles/editorModal.css"); ?>'));
+    // CSS is loaded via <link> in the .page files for instant styling.
+    // This JS fallback ensures the styles are present even when the main
+    // PHP is included from an unexpected entry point.
+    (function() {
+        var base = '<? autov("/plugins/compose.manager/styles/comboButton.css"); ?>';
+        var editor = '<? autov("/plugins/compose.manager/styles/editorModal.css"); ?>';
+        if (!$('link[href="' + base + '"]').length)
+            $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', base));
+        if (!$('link[href="' + editor + '"]').length)
+            $('head').append($('<link rel="stylesheet" type="text/css" />').attr('href', editor));
+    })();
 
     function basename(path) {
         return path.replace(/\\/g, '/').replace(/.*\//, '');
@@ -858,7 +867,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     updateHtml += '</div>';
                 } else if (updatesWithSha.length > 1) {
                     // Multiple updates - show expand hint
-                    updateHtml += '<div class="advanced" style="font-size:0.8em;color:#999;margin-top:2px;">Expand for details</div>';
+                    updateHtml += '<div class="cm-advanced" style="font-size:0.8em;color:#999;margin-top:2px;">Expand for details</div>';
                 }
             }
 
@@ -877,14 +886,14 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 // Some containers pinned, rest up-to-date
                 var html = '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
                 html += '<div style="font-size:0.8em;color:#17a2b8;margin-top:2px;"><i class="fa fa-thumb-tack fa-fw"></i> ' + pinnedCount + ' pinned</div>';
-                html += '<div class="advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
+                html += '<div class="cm-advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
                 $updateCell.html(html);
             } else {
                 // No updates, no pinned - green "up-to-date" style (like Docker tab)
                 // Basic view: just shows up-to-date
                 // Advanced view: shows force update link
                 var html = '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
-                html += '<div class="advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
+                html += '<div class="cm-advanced"><a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><span style="white-space:nowrap;"><i class="fa fa-cloud-download fa-fw"></i> force update</span></a></div>';
                 $updateCell.html(html);
             }
         } else {
@@ -895,11 +904,11 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
         // Apply current view mode to newly inserted advanced/basic elements
         var advanced = $.cookie('compose_listview_mode') === 'advanced';
         if (advanced) {
-            $updateCell.find('.advanced').show();
-            $updateCell.find('.basic').hide();
+            $updateCell.find('.cm-advanced').show();
+            $updateCell.find('.cm-basic').hide();
         } else {
-            $updateCell.find('.advanced').hide();
-            $updateCell.find('.basic').show();
+            $updateCell.find('.cm-advanced').hide();
+            $updateCell.find('.cm-basic').show();
         }
 
         // Rebuild context menus to reflect update status (only target icon spans with data-stackid, not the row)
@@ -3636,7 +3645,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 html += '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
                 if (ctLocalSha) {
                     // Show SHA in advanced view only for up-to-date containers
-                    html += '<div class="advanced" style="font-family:monospace;font-size:0.85em;color:#666;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 8)) + '</div>';
+                    html += '<div class="cm-advanced" style="font-family:monospace;font-size:0.85em;color:#666;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 8)) + '</div>';
                 }
             } else {
                 // Unknown/not checked
@@ -4455,14 +4464,14 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
     <table id="compose_stacks" class="tablesorter shift">
         <thead>
             <tr>
-                <th>Stack</th>
-                <th>Update</th>
-                <th>Containers</th>
-                <th>Uptime</th>
-                <th class="cm-advanced">Description</th>
-                <th class="cm-advanced">Compose</th>
-                <th class="cm-advanced">Path</th>
-                <th class="nine">Autostart</th>
+                <th style="width:22%">Stack</th>
+                <th style="width:16%">Update</th>
+                <th style="width:8%">Containers</th>
+                <th style="width:10%">Uptime</th>
+                <th class="cm-advanced" style="width:15%">Description</th>
+                <th class="cm-advanced" style="width:10%">Compose</th>
+                <th class="cm-advanced" style="width:12%">Path</th>
+                <th class="nine" style="width:7%">Autostart</th>
             </tr>
         </thead>
         <tbody id="compose_list">
