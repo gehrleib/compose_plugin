@@ -28,6 +28,31 @@
 >
 
 <CHANGES>
+###2026.02.09a
+- Bug Fixes: update patch UI logic for Unraid 6.12+ compatibility and improve user feedback
+- Bug Fixes: bidirectional state sync between Docker containers and Compose stacks (#4)
+  - Hook Unraid's loadlist() so Docker container changes (start/stop) automatically refresh the Compose stacks list
+  - Call loadlist() after compose actions (up/down/update/restart) so Unraid's Docker containers widget stays in sync
+  - Call loadlist() after individual container actions from compose expanded view
+  - Works in both tabbed and non-tabbed Docker page layouts
+  - Dashboard tile: hook loadlist() to invalidate cache and refresh compose stacks
+- Bug Fixes: ensure Add Container button remains enabled and visible in Docker actions
+- Bug Fixes: resolve switch toggle display bugs (OFFON artifact, label misalignment, view toggle)
+  - Remove 'autostart' CSS class from compose checkboxes to prevent Docker tab JS
+  - Change advanced view toggle to labels_placement: 'left' so both labels appear
+  - Add clear:false to autostart switchButton init to prevent clear div from
+  - Add CSS to hide .advanced columns by default to prevent FOUC on page load
+  - Add white-space:nowrap on autostart cells for the standalone Compose tab
+  - Remove broken fixSwitchButtonLabels() function and all its call sites
+  - Code style formatting improvements in compose_list.php
+- Bug Fixes: update patch file paths for DockerContainers and Docker in 7.0 and 7.1-7.2
+- Bug Fixes: split patches by version more finely for more robust patching
+- Bug Fixes: PHPStan offset access on non-empty-list<string> in backup_functions.php (use isset for hour/minute)
+- Bug Fixes: static analysis error for offset access on non-empty-list<string> (isset for label keys)
+- Bug Fixes: restore checklist 'Select All' checkbox updates correctly when stacks are (de)selected (fixes #13)
+- Chores: normalize CRLF line endings to LF
+- Revert "fix: static analysis error for offset access on non-empty-list<string> (isset for label keys)"
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.09...v2026.02.09a)
 ###2026.02.09
 - Features: Implement filtering for compose-managed containers
   - Added functionality to optionally hide compose-managed containers in DockerClient and DockerContainers.
