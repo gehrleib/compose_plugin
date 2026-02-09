@@ -15,7 +15,8 @@ $summary = [
     'started' => 0,
     'stopped' => 0,
     'partial' => 0,
-    'stacks' => []
+    'stacks' => [],
+    'composeContainerNames' => []
 ];
 
 if (!is_dir($compose_root)) {
@@ -147,5 +148,18 @@ foreach ($projects as $project) {
 }
 
 header('Content-Type: application/json');
+
+// Collect all compose container names (for hiding from Docker tile)
+foreach ($containersByProject as $projName => $containers) {
+    foreach ($containers as $ct) {
+        $name = $ct['Names'] ?? '';
+        // docker ps Names field may have leading slash or comma-separated names
+        $name = ltrim(trim($name), '/');
+        if ($name) {
+            $summary['composeContainerNames'][] = $name;
+        }
+    }
+}
+
 echo json_encode($summary);
 ?>
