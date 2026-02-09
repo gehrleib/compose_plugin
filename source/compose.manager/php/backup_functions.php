@@ -293,8 +293,8 @@ function updateBackupCron()
 
     // Parse time
     $parts = explode(':', $time);
-    $hour = intval($parts[0] ?? 3);
-    $minute = intval($parts[1] ?? 0);
+    $hour = isset($parts[0]) ? intval($parts[0]) : 3;
+    $minute = isset($parts[1]) ? intval($parts[1]) : 0;
 
     if ($frequency === 'weekly') {
         $cronLine = "{$minute} {$hour} * * {$dayOfWeek} root {$script} >/dev/null 2>&1";
