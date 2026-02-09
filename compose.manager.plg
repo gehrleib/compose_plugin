@@ -28,82 +28,9 @@
 >
 
 <CHANGES>
-###2026.02.09a
-- Bug Fixes: update patch UI logic for Unraid 6.12+ compatibility and improve user feedback
-- Bug Fixes: bidirectional state sync between Docker containers and Compose stacks (#4)
-  - Hook Unraid's loadlist() so Docker container changes (start/stop) automatically refresh the Compose stacks list
-  - Call loadlist() after compose actions (up/down/update/restart) so Unraid's Docker containers widget stays in sync
-  - Call loadlist() after individual container actions from compose expanded view
-  - Works in both tabbed and non-tabbed Docker page layouts
-  - Dashboard tile: hook loadlist() to invalidate cache and refresh compose stacks
-- Bug Fixes: ensure Add Container button remains enabled and visible in Docker actions
-- Bug Fixes: resolve switch toggle display bugs (OFFON artifact, label misalignment, view toggle)
-  - Remove 'autostart' CSS class from compose checkboxes to prevent Docker tab JS
-  - Change advanced view toggle to labels_placement: 'left' so both labels appear
-  - Add clear:false to autostart switchButton init to prevent clear div from
-  - Add CSS to hide .advanced columns by default to prevent FOUC on page load
-  - Add white-space:nowrap on autostart cells for the standalone Compose tab
-  - Remove broken fixSwitchButtonLabels() function and all its call sites
-  - Code style formatting improvements in compose_list.php
-- Bug Fixes: update patch file paths for DockerContainers and Docker in 7.0 and 7.1-7.2
-- Bug Fixes: split patches by version more finely for more robust patching
-- Bug Fixes: PHPStan offset access on non-empty-list&lt;string&gt; in backup_functions.php (use isset for hour/minute)
-- Bug Fixes: static analysis error for offset access on non-empty-list&lt;string&gt; (isset for label keys)
-- Bug Fixes: restore checklist 'Select All' checkbox updates correctly when stacks are (de)selected (fixes #13)
-- Chores: normalize CRLF line endings to LF
-- Revert "fix: static analysis error for offset access on non-empty-list&lt;string&gt; (isset for label keys)"
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.09...v2026.02.09a)
-###2026.02.09
-- Features: Implement filtering for compose-managed containers
-  - Added functionality to optionally hide compose-managed containers in DockerClient and DockerContainers.
-  - Introduced configuration option HIDE_COMPOSE_FROM_DOCKER to control visibility of compose-managed containers.
-  - Updated Docker system scripts to respect the new configuration setting.
-  - Enhanced DockerClient to include additional metadata for containers, such as Icon, Url, Shell, and Manager.
-  - Created patch.sh script for robust patch management, allowing for easy application and removal of patches.
-  - Added unit tests for the new filtering logic and settings page to ensure correct behavior.
-- Features: hide compose containers from Docker tile on Dashboard
-  - Add HIDE_DOCKER_COMPOSE_CONTAINERS setting (default: false)
-  - Collect container names from compose stacks in dashboard_stacks.php
-  - Hide matching containers using ajaxComplete + CSS !important class
-  - Grey out option when Show Dashboard Tile is disabled
-- Features: add option to display Compose stacks above Docker Containers
-  - Add SHOW_COMPOSE_ON_TOP config with default 'false'
-  - Add settings toggle with dependency on Header Menu setting
-  - Add DOM reorder logic in compose_manager_main.php that moves
-- Bug Fixes: update patch file to skip disabling compose containers
-- Fix dashboard visual bugs: dynamic flex layout, SHA display, CSS class collision
-  - Replace fixed-width CSS columns with dynamic flexbox layout (name flex:1, cols flex:2)
-  - Remove --compose-name-width and --compose-image-width CSS variables
-  - Fix SHA display stripping sha256: prefix before truncating to 8 hex chars
-  - Rename CSS class from 'info' to 'containers' to avoid Unraid global .info collision
-  - Add min-width:0 and overflow:hidden to flex containers for proper truncation
-  - Set update column to 120px, runtime to 100px with 12px right padding
-  - Remove spacer column, use flex-grow for container image column
-- Update settings page to clarify option for hiding Compose containers from Docker UI
-- Fix formatting and improve readability in settings page
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.08...v2026.02.09)
-###2026.02.08
-- Features: enable blank issues and add feature request template for contributions
-- Features: add issues section to issue template configuration
-- Features: add issue and pull request templates for better contribution guidelines
-- Features: create initial override file for UI labels if it doesn't exist and remove old modal for editing the override file
-- Bug Fixes: enhance UI feedback with localized spinners and status icons for compose actions
-- Bug Fixes: include --all flag in docker compose commands to return exited/stopped containers
-- Bug Fixes: improve switch button initialization and ensure consistent label alignment
-- Bug Fixes: enhance switchButton initialization to prevent re-binding and ensure consistent state
-- Bug Fixes: replace outdated bug report template with a new structured format
-- Bug Fixes: remove outdated bug report template from issue configuration
-- Bug Fixes: correct name field in bug report template
-- Bug Fixes: standardize quotes and formatting in bug report template
-- Bug Fixes: add quotes around bug report name
-- Bug Fixes: remove title field from bug report template
-- Bug Fixes: correct placeholder syntax in bug report template title
-- Bug Fixes: update support forum URL in issue template configuration
-- Bug Fixes: ensure text coverage report is generated in phpunit configuration
-- Bug Fixes: add workspace instructions file to .gitignore
-- Chores: remove outdated bug report and feature request templates
-- Update issue templates by adding bug report template from webui
-- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.03d...v2026.02.08)
+###2026.02.09b
+- Bug Fixes: correct HTML entity encoding in bug fix descriptions and revert previous static analysis error fix
+- [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.09a...v2026.02.09b)
 
 </CHANGES>
 
