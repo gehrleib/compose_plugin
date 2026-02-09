@@ -47,11 +47,11 @@
   - Code style formatting improvements in compose_list.php
 - Bug Fixes: update patch file paths for DockerContainers and Docker in 7.0 and 7.1-7.2
 - Bug Fixes: split patches by version more finely for more robust patching
-- Bug Fixes: PHPStan offset access on non-empty-list<string> in backup_functions.php (use isset for hour/minute)
-- Bug Fixes: static analysis error for offset access on non-empty-list<string> (isset for label keys)
+- Bug Fixes: PHPStan offset access on non-empty-list&lt;string&gt; in backup_functions.php (use isset for hour/minute)
+- Bug Fixes: static analysis error for offset access on non-empty-list&lt;string&gt; (isset for label keys)
 - Bug Fixes: restore checklist 'Select All' checkbox updates correctly when stacks are (de)selected (fixes #13)
 - Chores: normalize CRLF line endings to LF
-- Revert "fix: static analysis error for offset access on non-empty-list<string> (isset for label keys)"
+- Revert "fix: static analysis error for offset access on non-empty-list&lt;string&gt; (isset for label keys)"
 - [View all changes](https://github.com/mstrhakr/compose_plugin/compare/v2026.02.09...v2026.02.09a)
 ###2026.02.09
 - Features: Implement filtering for compose-managed containers
