@@ -640,7 +640,8 @@ function toggleAutoScroll() {
   </dd>
 </dl>
 
-<dt style="cursor: help;" onclick="toggleHelp(this)">_(Hide Compose-managed containers from Docker UI)_:</dt>
+<dl>
+  <dt style="cursor: help;" onclick="toggleHelp(this)">_(Hide Compose Containers from Docker UI via Patch)_:</dt>
   <dd>
     <input type="checkbox" name="HIDE_COMPOSE_FROM_DOCKER" class="compose-toggle" <?=($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') == 'true' ? 'checked' : ''?>>
     <blockquote class="inline_help">
