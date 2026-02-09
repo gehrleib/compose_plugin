@@ -1004,15 +1004,50 @@ $showComposeOnTop = ($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') === 'true';
     })
 
     // Apply advanced/basic view based on cookie (used after async load)
-    // Scoped to compose_stacks to avoid affecting Docker tab when tabs are joined
-    function applyListView() {
+    // Scoped to compose_stacks to avoid affecting Docker tab when tabs are joined.
+    // When animate=true (user clicked toggle), run a phased transition:
+    //   Phase 1: fade out departing cells (opacity only, layout preserved)
+    //   Phase 2: swap visibility, animate table height, fade in new cells
+    // When false (page load), instant.
+    function applyListView(animate) {
         var advanced = $.cookie('compose_listview_mode') === 'advanced';
-        if (advanced) {
-            $('#compose_stacks .advanced').show();
-            $('#compose_stacks .basic').hide();
+        var $table = $('#compose_stacks');
+
+        if (animate) {
+            var $toHide = advanced ? $table.find('.basic') : $table.find('.advanced');
+            var $toShow = advanced ? $table.find('.advanced') : $table.find('.basic');
+
+            // Capture starting height
+            var startHeight = $table.outerHeight();
+
+            // Phase 1: Fade out departing elements (opacity only — preserves layout)
+            $toHide.animate({ opacity: 0 }, 300).promise().done(function() {
+                // Phase 2: Swap visibility
+                $toHide.hide().removeAttr('style');
+                $toShow.css('opacity', 0).show();
+
+                // Measure new natural height
+                var endHeight = $table.outerHeight();
+
+                // Animate table height from old to new size
+                $table.css({ height: startHeight, overflow: 'hidden' })
+                      .animate({ height: endHeight }, 400);
+
+                // Fade in incoming elements
+                $toShow.animate({ opacity: 1 }, 400).promise().done(function() {
+                    // Clean up all inline styles so CSS owns the steady state
+                    $table.removeAttr('style');
+                    $toShow.removeAttr('style');
+                });
+            });
         } else {
-            $('#compose_stacks .advanced').hide();
-            $('#compose_stacks .basic').show();
+            if (advanced) {
+                $table.find('.advanced').show();
+                $table.find('.basic').hide();
+            } else {
+                $table.find('.advanced').hide();
+                $table.find('.basic').show();
+            }
         }
         // Apply readmore to descriptions — exclude container detail rows to avoid double-application
         $('#compose_stacks .docker_readmore').not('.stack-details-container .docker_readmore').readmore({
@@ -1089,7 +1124,7 @@ $showComposeOnTop = ($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') === 'true';
             $.cookie('compose_listview_mode', $('.compose-advancedview').is(':checked') ? 'advanced' : 'basic', {
                 expires: 3650
             });
-            applyListView();
+            applyListView(true);
         });
 
         // Set up MutationObserver to detect when ebox (progress dialog) closes
