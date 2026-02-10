@@ -100,10 +100,13 @@ $styles = <<<EOT
 .compose-dash-expand {
     width: var(--compose-expand-width);
     flex-shrink: 0;
-    transition: transform 0.2s;
     color: #666;
 }
-.compose-dash-expand.expanded { transform: rotate(90deg); }
+.compose-dash-expand::before {
+    display: inline-block;
+    transition: transform 0.2s;
+}
+.compose-dash-expand.expanded::before { transform: rotate(90deg); }
 .compose-dash-icon {
     width: 32px;
     height: 32px;
