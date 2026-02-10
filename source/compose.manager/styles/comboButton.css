@@ -196,27 +196,10 @@
   color: #ccc !important;
 }
 
-/* Parent stack table: use fixed layout so columns stay stable when
-   expanding/collapsing detail rows (their colspan row doesn't affect widths).
-   Column widths are set via inline styles on <th> elements – the CSS below
-   only provides structural rules. */
-#compose_stacks {
-  width: 100%;
-  table-layout: fixed;
-}
-
-/* Center the "Containers" column (3rd column) */
-#compose_stacks thead th:nth-child(3),
-#compose_stacks tbody td:nth-child(3) {
-  text-align: center;
-}
-/* Details row spans full width */
-#compose_stacks .stack-details-cell { width: auto !important; }
-
-/* Details row background — subtle differentiation from stack rows */
-#compose_stacks tbody tr.stack-details-row {
-  background-color: rgba(0,0,0,0.08) !important;
-}
+/* ── Stack table structural rules ──
+   Critical layout rules (table-layout, column widths, advanced/basic
+   visibility) are inlined in compose_manager_main.php for instant
+   availability.  The rules below are supplemental / non-critical. */
 
 /* Update column links - ensure pointer cursor */
 .updatecolumn a,
@@ -226,28 +209,6 @@
 
 .updatecolumn a:hover {
   text-decoration: none;
-}
-
-/* Hide advanced-view columns by default via CSS so they are never visible
-   before JavaScript runs.  Uses compose-specific 'cm-advanced' class to avoid
-   conflict with Docker tab's own '.advanced' toggle.
-   When the table has .cm-advanced-view, the columns are revealed. */
-#compose_stacks .cm-advanced {
-  display: none;
-}
-#compose_stacks.cm-advanced-view .cm-advanced {
-  display: table-cell;
-}
-/* Inline elements (e.g. the project folder div inside the stack name cell) */
-#compose_stacks.cm-advanced-view div.cm-advanced {
-  display: block;
-}
-
-/* Keep autostart switch labels on one line inside the table cell.
-   On the standalone Compose tab the default float layout can wrap
-   the "On" label to a new line without this. */
-#compose_stacks td.nine {
-  white-space: nowrap;
 }
 
 /* Prevent autostart toggle label from wrapping to a new line in narrow columns.
@@ -357,9 +318,11 @@
   vertical-align: bottom;
   color: #f0a000;
 }
-/* Source column: allow wrapping for long image names */
+/* Source column: allow wrapping, left-aligned */
+.compose-ct-table th:nth-child(3),
 .compose-ct-table td:nth-child(3) {
   white-space: normal;
   word-break: break-all;
   color: #606060;
+  text-align: left !important;
 }

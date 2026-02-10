@@ -274,7 +274,7 @@ foreach ($composeProjects as $project) {
     // Name column: expand arrow, then icon with context menu, then name
     $o .= "<td class='ct-name' style='padding:8px'>";
     // Expand arrow on the left (separate from the outer/inner structure)
-    $o .= "<span style='display:inline-block;width:20px;text-align:center;vertical-align:middle;'>";
+    $o .= "<span style='display:inline-block;width:20px;text-align:center;vertical-align:middle;margin-right:6px;'>";
     $o .= "<i class='fa fa-chevron-right expand-icon' id='expand-icon-$id' onclick='toggleStackDetails(\"$id\");event.stopPropagation();' style='cursor:pointer;'></i>";
     $o .= "</span>";
     // Icon and name using Docker's outer/inner structure

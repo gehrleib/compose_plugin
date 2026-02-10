@@ -19,6 +19,51 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 // This improves page load time by deferring expensive docker commands
 ?>
 
+<?php /* ── Critical inline CSS ──────────────────────────────────────────────
+   Guarantees table-layout, column widths, and advanced/basic visibility
+   are applied synchronously BEFORE any HTML renders — prevents FOUC.
+   Non-critical styles remain in comboButton.css loaded via <link>. */ ?>
+<style>
+/* Table structure — always fixed layout */
+#compose_stacks{width:100%;table-layout:fixed}
+/* Clip overflowing content in fixed-layout cells */
+#compose_stacks th,#compose_stacks td{overflow:hidden;text-overflow:ellipsis}
+/* Basic-view column widths (5 visible columns → 100%)
+   Middle 3 columns equal width; Stack + Autostart bookend. */
+#compose_stacks thead th.col-stack{width:33%}
+#compose_stacks thead th.col-update{width:18%}
+#compose_stacks thead th.col-containers{width:18%}
+#compose_stacks thead th.col-uptime{width:18%}
+#compose_stacks thead th.col-autostart{width:13%}
+/* Advanced-view column widths (8 visible columns → 100%)
+   Description + Path get the most space; compact everything else. */
+#compose_stacks.cm-advanced-view thead th.col-stack{width:14%}
+#compose_stacks.cm-advanced-view thead th.col-update{width:9%}
+#compose_stacks.cm-advanced-view thead th.col-containers{width:5%}
+#compose_stacks.cm-advanced-view thead th.col-uptime{width:8%}
+#compose_stacks.cm-advanced-view thead th.col-description{width:22%}
+#compose_stacks.cm-advanced-view thead th.col-compose{width:7%}
+#compose_stacks.cm-advanced-view thead th.col-path{width:29%}
+#compose_stacks.cm-advanced-view thead th.col-autostart{width:6%}
+/* Center the Containers column */
+#compose_stacks thead th.col-containers,
+#compose_stacks tbody td:nth-child(3){text-align:center}
+/* Autostart column: right-align content to push toggles to edge */
+#compose_stacks thead th.col-autostart,
+#compose_stacks > tbody > tr > td:last-child{text-align:right}
+/* Advanced/basic visibility — CSS-only so no flash of hidden content */
+#compose_stacks .cm-advanced{display:none}
+#compose_stacks.cm-advanced-view .cm-advanced{display:table-cell}
+#compose_stacks.cm-advanced-view div.cm-advanced{display:block}
+/* Detail row */
+#compose_stacks .stack-details-cell{width:auto!important}
+#compose_stacks tbody tr.stack-details-row{background-color:rgba(0,0,0,0.08)!important}
+/* Autostart cell */
+#compose_stacks td.nine{white-space:nowrap;padding-right:15px}
+/* Container sub-table source column: left-align (override theme) */
+.compose-ct-table th:nth-child(3),.compose-ct-table td:nth-child(3){text-align:left!important}
+</style>
+
 <script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
 <script src="/plugins/compose.manager/javascript/js-yaml/js-yaml.min.js" type="text/javascript"></script>
 <script>
@@ -211,23 +256,19 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             lessLink: "<a href='#' style='text-align:center'><i class='fa fa-chevron-up'></i></a>"
         });
 
-        // Apply current view mode (advanced/basic) - scope to compose_stacks
+        // Apply current view mode (advanced/basic) via CSS class on table
         var advanced = $.cookie('compose_listview_mode') === 'advanced';
         if (advanced) {
-            $('#compose_stacks .cm-advanced').show();
-            $('#compose_stacks .cm-basic').hide();
+            $('#compose_stacks').addClass('cm-advanced-view');
         } else {
-            $('#compose_stacks .cm-advanced').hide();
-            $('#compose_stacks .cm-basic').show();
+            $('#compose_stacks').removeClass('cm-advanced-view');
         }
 
         // Load saved update status after list is loaded
         loadSavedUpdateStatus();
     }
 
-    // CSS is loaded via <link> in the .page files for instant styling.
-    // This JS fallback ensures the styles are present even when the main
-    // PHP is included from an unexpected entry point.
+    // Load external stylesheets (non-critical styles — critical ones are inline above)
     (function() {
         var base = '<? autov("/plugins/compose.manager/styles/comboButton.css"); ?>';
         var editor = '<? autov("/plugins/compose.manager/styles/editorModal.css"); ?>';
@@ -901,15 +942,9 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             $updateCell.html('<a class="exec" style="cursor:pointer;" onclick="showUpdateWarning(\'' + escapeAttr(stackName) + '\', \'' + escapeAttr(stackId) + '\');"><i class="fa fa-cloud-download fa-fw"></i> pull updates</a>');
         }
 
-        // Apply current view mode to newly inserted advanced/basic elements
-        var advanced = $.cookie('compose_listview_mode') === 'advanced';
-        if (advanced) {
-            $updateCell.find('.cm-advanced').show();
-            $updateCell.find('.cm-basic').hide();
-        } else {
-            $updateCell.find('.cm-advanced').hide();
-            $updateCell.find('.cm-basic').show();
-        }
+        // Apply current view mode — cm-advanced elements are controlled by
+        // the .cm-advanced-view class on #compose_stacks (CSS-only, no need to
+        // show/hide individual elements here since CSS handles visibility).
 
         // Rebuild context menus to reflect update status (only target icon spans with data-stackid, not the row)
         $('[id^="stack-"][data-stackid][data-project="' + stackName + '"]').each(function() {
@@ -1040,8 +1075,8 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 $table.css({ height: startHeight, overflow: 'hidden' })
                       .animate({ height: endHeight }, 400);
                 $changing.animate({ opacity: 1 }, 400).promise().done(function() {
-                    $table.removeAttr('style');
-                    $changing.removeAttr('style');
+                    $table.css({ height: '', overflow: '' });
+                    $changing.css('opacity', '');
                 });
             } else {
                 // Hiding advanced columns: fade out, then remove class
@@ -1052,8 +1087,8 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
                     $table.css({ height: startHeight, overflow: 'hidden' })
                           .animate({ height: endHeight }, 400, function() {
-                              $table.removeAttr('style');
-                              $changing.removeAttr('style');
+                              $table.css({ height: '', overflow: '' });
+                              $changing.css('opacity', '');
                           });
                 });
             }
@@ -3644,8 +3679,8 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 // No update - green "up-to-date" style
                 html += '<span class="green-text" style="white-space:nowrap;"><i class="fa fa-check fa-fw"></i> up-to-date</span>';
                 if (ctLocalSha) {
-                    // Show SHA in advanced view only for up-to-date containers
-                    html += '<div class="cm-advanced" style="font-family:monospace;font-size:0.85em;color:#666;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 8)) + '</div>';
+                    // Show SHA in advanced view only for up-to-date containers (15 chars)
+                    html += '<div class="cm-advanced" style="font-family:monospace;font-size:0.85em;color:#666;" title="' + escapeAttr(ctLocalSha) + '">' + escapeHtml(ctLocalSha.substring(0, 15)) + '</div>';
                 }
             } else {
                 // Unknown/not checked
@@ -3950,22 +3985,24 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             });
         }
 
-        // Console (if running) - uses Unraid's openTerminal
+        // Console (if running) — ttyd + Shadowbox (same proven mechanism used for stack operations)
         if (running) {
             opts.push({
                 text: 'Console',
                 icon: 'fa-terminal',
                 action: function(e) {
                     e.preventDefault();
-                    if (typeof openTerminal === 'function') {
-                        openTerminal('docker', containerName, shell);
-                    } else {
-                        swal({
-                            title: 'Console',
-                            text: 'Terminal not available',
-                            type: 'info'
-                        });
-                    }
+                    $.post(compURL, {action: 'containerConsole', container: containerName, shell: shell}, function(data) {
+                        if (data) {
+                            var height = Math.min(screen.availHeight, 800);
+                            var width  = Math.min(screen.availWidth, 1200);
+                            if (typeof openBox === 'function') {
+                                openBox(data, 'Console: ' + containerName, height, width, true);
+                            } else {
+                                Shadowbox.open({content: data, player: 'iframe', title: 'Console: ' + containerName, height: height, width: width});
+                            }
+                        }
+                    });
                 }
             });
             opts.push({
@@ -4461,17 +4498,17 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
     <span class='tipsterallowed' hidden></span>
     <div class="TableContainer">
-    <table id="compose_stacks" class="tablesorter shift">
+    <table id="compose_stacks" class="tablesorter shift" style="table-layout:fixed;width:100%">
         <thead>
             <tr>
-                <th style="width:22%">Stack</th>
-                <th style="width:16%">Update</th>
-                <th style="width:8%">Containers</th>
-                <th style="width:10%">Uptime</th>
-                <th class="cm-advanced" style="width:15%">Description</th>
-                <th class="cm-advanced" style="width:10%">Compose</th>
-                <th class="cm-advanced" style="width:12%">Path</th>
-                <th class="nine" style="width:7%">Autostart</th>
+                <th class="col-stack">Stack</th>
+                <th class="col-update">Update</th>
+                <th class="col-containers">Containers</th>
+                <th class="col-uptime">Uptime</th>
+                <th class="cm-advanced col-description">Description</th>
+                <th class="cm-advanced col-compose">Compose</th>
+                <th class="cm-advanced col-path">Path</th>
+                <th class="nine col-autostart">Autostart</th>
             </tr>
         </thead>
         <tbody id="compose_list">
