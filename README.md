@@ -52,16 +52,34 @@ https://raw.githubusercontent.com/mstrhakr/compose_plugin/main/compose.manager.p
 
 ## Configuration
 
-Settings can be accessed via **Settings → Compose** in the unRAID web UI:
+Settings can be accessed via **Settings → Compose** in the unRAID web UI. The settings page has three tabs: **Settings**, **Backup/Restore**, and **Log**.
 
-| Setting | Description |
-|---------|-------------|
-| **Output Style** | Choose between terminal (ttyd) or basic output |
-| **Projects Folder** | Location where compose project directories are stored (default: `/boot/config/plugins/compose.manager/projects`) |
-| **Autostart Force Recreate** | Force recreate containers during autostart |
-| **Show in Header Menu** | Display Compose Manager as a separate page in the header menu under Docker Compose |
-| **Patch Web UI** | Enable integration patches for the native Docker manager UI |
-| **Debug to Log** | Enable debug logging |
+### General Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Output Style** | Terminal | Choose between terminal (ttyd) or basic output for compose operations |
+| **Projects Folder** | `/boot/config/plugins/compose.manager/projects` | Location where compose project directories are stored |
+| **Autostart Force Recreate** | No | Force recreate containers during autostart |
+| **Show in Header Menu** | No | Display Compose Manager as a separate page in the header menu |
+| **Show Compose on Top** | No | Show compose stacks above Docker containers on the Docker tab |
+| **Hide Compose from Docker** | No | Hide compose-managed containers from the Docker containers table |
+| **Show Dashboard Tile** | Yes | Display a Compose Stacks tile on the Dashboard |
+| **Hide Compose from Docker Tile** | No | Hide compose containers from the Dashboard Docker tile |
+| **Auto Check for Updates** | No | Automatically check for container image updates on page load |
+| **Auto Check Interval** | 1 day | How often to recheck for updates (0.04 = hourly, 7 = weekly) |
+| **Debug Logging** | No | Log detailed compose information to syslog |
+
+### Backup / Restore Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Backup Destination** | `/boot/config/plugins/compose.manager/backups` | Path where backup archives are stored |
+| **Backups to Keep** | 5 | Number of backup archives to retain (0 = unlimited) |
+| **Scheduled Backup** | No | Enable automatic scheduled backups via cron |
+| **Schedule Frequency** | Daily | Daily or weekly backup schedule |
+| **Schedule Day** | Monday | Day of week for weekly backups |
+| **Schedule Time** | 03:00 | Time of day for scheduled backups |
 
 ## Usage
 
