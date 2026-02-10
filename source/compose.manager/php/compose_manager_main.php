@@ -3815,7 +3815,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             }
 
             // Detect if an update check is currently in progress (spinner visible)
-            var $updateCell = $stackRow.find('td.updatecolumn');
+            var $updateCell = $stackRow.find('td.compose-updatecolumn');
             var isChecking = $updateCell.find('.fa-refresh.fa-spin').length > 0;
 
             // Update the update-column using existing helper (expects stackInfo)
