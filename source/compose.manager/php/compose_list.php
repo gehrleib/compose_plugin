@@ -7,7 +7,7 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
-require_once("/usr/local/emhttp/plugins/compose.manager/php/compose_list_functions.php");
+// Note: helper functions removed; test suite provides any needed test-local helpers.
 
 // Get stack state
 $stackstate = shell_exec($plugin_root . "/scripts/compose.sh -c list");
