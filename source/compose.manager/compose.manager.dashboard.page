@@ -167,47 +167,15 @@ $script = <<<'EOT'
     }
 
     // Resolve WebUI URL placeholders for a container
-    // Handles [IP] (uses container IP for non-bridge networks, hostname otherwise)
-    // Handles [PORT:xxxx] (maps container port to host-exposed port)
-    function resolveContainerWebUI(url, ports, networks) {
+    // As of this version, WebUI URLs are resolved server-side in exec.php
+    // (matching Unraid's DockerClient logic for IP/PORT resolution).
+    // This function is kept as a fallback for any unresolved placeholders.
+    function resolveContainerWebUI(url) {
         if (!url) return '';
-
-        // Resolve [IP]
-        var resolvedIp = window.location.hostname;
-        if (networks && networks.length > 0) {
-            for (var n = 0; n < networks.length; n++) {
-                var netIp = networks[n].ip || '';
-                if (netIp && netIp !== '0.0.0.0') {
-                    var netName = (networks[n].name || '').toLowerCase();
-                    if (netName !== 'bridge' && netName !== 'default') {
-                        resolvedIp = netIp;
-                        break;
-                    }
-                }
-            }
-        }
-        url = url.replace(/\[IP\]/gi, resolvedIp);
-
-        // Resolve [PORT:xxxx] using host port mappings
-        url = url.replace(/\[PORT:(\d+)\]/gi, function(match, containerPort) {
-            if (ports && ports.length > 0) {
-                for (var i = 0; i < ports.length; i++) {
-                    var parts = ports[i].split('->');
-                    if (parts.length === 2) {
-                        var ctPort = parts[1].replace(/\/.*$/, '');
-                        if (ctPort === containerPort) {
-                            var hostSide = parts[0];
-                            var lastColon = hostSide.lastIndexOf(':');
-                            if (lastColon !== -1) {
-                                return hostSide.substring(lastColon + 1);
-                            }
-                        }
-                    }
-                }
-            }
-            return containerPort;
-        });
-
+        // Fallback: replace any remaining [IP] with hostname
+        url = url.replace(/\[IP\]/gi, window.location.hostname);
+        // Fallback: replace any remaining [PORT:xxxx] with the port number
+        url = url.replace(/\[PORT:(\d+)\]/gi, '$1');
         return url;
     }
 
@@ -439,7 +407,7 @@ $script = <<<'EOT'
                         var ctElId = 'dash-ct-' + ct.ID.substring(0, 12);
                         var imgSrc = ct.Icon || '/plugins/dynamix.docker.manager/images/question.png';
                         var escapedName = ct.Name.replace(/'/g, "\\'");
-                        var webui = resolveContainerWebUI(ct.WebUI, ct.Ports, ct.Networks).replace(/'/g, "\\'");
+                        var webui = resolveContainerWebUI(ct.WebUI).replace(/'/g, "\\'");
                         var shell = (ct.Shell || 'sh').replace(/'/g, "\\'");
                         var shortId = ct.ID.substring(0, 12);
                         // Parse image to get repo and tag
