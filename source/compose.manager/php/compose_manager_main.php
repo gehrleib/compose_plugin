@@ -1037,12 +1037,56 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
     }
 
     // Process WebUI URL placeholders (like Unraid's Docker WebUI handling)
-    function processWebUIUrl(url) {
+    // ports: optional array of port strings like ["0.0.0.0:9090->8080/tcp"]
+    // networks: optional array of network objects like [{name:'bridge', ip:'172.17.0.2'}]
+    function processWebUIUrl(url, ports, networks) {
         if (!url) return url;
-        // Replace [IP] with the current server hostname/IP
-        url = url.replace(/\[IP\]/gi, window.location.hostname);
-        // Replace [PORT:xxxx] with the specified port (for compatibility with Docker template format)
-        url = url.replace(/\[PORT:(\d+)\]/gi, '$1');
+
+        // Replace [IP]: use container IP if available and not on host/bridge default,
+        // otherwise use the server hostname
+        var resolvedIp = window.location.hostname;
+        if (networks && networks.length > 0) {
+            // If container has a custom IP (not empty and not the default bridge gateway),
+            // use it. This handles macvlan, ipvlan, and custom networks.
+            for (var n = 0; n < networks.length; n++) {
+                var netIp = networks[n].ip || '';
+                if (netIp && netIp !== '0.0.0.0') {
+                    // For bridge networks, containers get an internal IP that's not
+                    // reachable from the host browser — keep using hostname.
+                    // For non-bridge networks (macvlan, ipvlan, custom), use container IP.
+                    var netName = (networks[n].name || '').toLowerCase();
+                    if (netName !== 'bridge' && netName !== 'default') {
+                        resolvedIp = netIp;
+                        break;
+                    }
+                }
+            }
+        }
+        url = url.replace(/\[IP\]/gi, resolvedIp);
+
+        // Replace [PORT:xxxx]: look up the host-mapped port for the given container port
+        url = url.replace(/\[PORT:(\d+)\]/gi, function(match, containerPort) {
+            if (ports && ports.length > 0) {
+                // ports are formatted like "0.0.0.0:9090->8080/tcp" or ":::9090->8080/tcp"
+                for (var i = 0; i < ports.length; i++) {
+                    var parts = ports[i].split('->');
+                    if (parts.length === 2) {
+                        // parts[1] is like "8080/tcp" — extract just the port number
+                        var ctPort = parts[1].replace(/\/.*$/, '');
+                        if (ctPort === containerPort) {
+                            // parts[0] is like "0.0.0.0:9090" — extract the host port
+                            var hostSide = parts[0];
+                            var lastColon = hostSide.lastIndexOf(':');
+                            if (lastColon !== -1) {
+                                return hostSide.substring(lastColon + 1);
+                            }
+                        }
+                    }
+                }
+            }
+            // Fallback: use the container port as-is (no mapping found)
+            return containerPort;
+        });
         return url;
     }
 
@@ -3625,7 +3669,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             // WebUI
             var webui = '';
             if (container.WebUI) {
-                webui = container.WebUI.replace(/\[IP\]/g, window.location.hostname);
+                webui = processWebUIUrl(container.WebUI, container.Ports, container.Networks);
                 if (!isValidWebUIUrl(webui)) webui = '';
             }
 
