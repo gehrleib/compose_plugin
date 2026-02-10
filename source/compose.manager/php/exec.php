@@ -474,21 +474,19 @@ switch ($_POST['action']) {
                                     $container['Created'] = $inspect['Created'] ?? '';
                                     $container['StartedAt'] = $inspect['State']['StartedAt'] ?? '';
                                     
-                                    // Get ports
+                                    // Get ports (raw bindings - IP resolved below after network detection)
                                     $ports = [];
                                     $portBindings = $inspect['HostConfig']['PortBindings'] ?? [];
                                     foreach ($portBindings as $containerPort => $bindings) {
                                         if ($bindings) {
                                             foreach ($bindings as $binding) {
                                                 $hostPort = $binding['HostPort'] ?? '';
-                                                $hostIp = $binding['HostIp'] ?? '0.0.0.0';
                                                 if ($hostPort) {
-                                                    $ports[] = "$hostIp:$hostPort->$containerPort";
+                                                    $ports[] = ['hostPort' => $hostPort, 'containerPort' => $containerPort];
                                                 }
                                             }
                                         }
                                     }
-                                    $container['Ports'] = $ports;
                                     
                                     // Get volumes
                                     $volumes = [];
@@ -530,23 +528,31 @@ switch ($_POST['action']) {
                                     }
                                     
                                     $container['WebUI'] = '';
-                                    if (!empty($webUITemplate) && $hostIP) {
-                                        // Resolve [IP] — Unraid logic:
-                                        // host mode → host IP
-                                        // macvlan/ipvlan → container IP
-                                        // bridge (with port mappings) → host IP
+                                    // Resolve IP — Unraid logic:
+                                    // host mode → host IP
+                                    // macvlan/ipvlan → container IP
+                                    // bridge (with port mappings) → host IP
+                                    $resolvedIP = $hostIP;
+                                    if ($networkMode === 'host') {
                                         $resolvedIP = $hostIP;
-                                        if ($networkMode === 'host') {
-                                            $resolvedIP = $hostIP;
-                                        } elseif (isset($networkDrivers[$networkMode]) &&
-                                                  in_array($networkDrivers[$networkMode], ['macvlan', 'ipvlan'])) {
-                                            // Use container's own routable IP
-                                            $firstNet = reset($networkSettings);
-                                            $containerIP = $firstNet['IPAddress'] ?? '';
-                                            if ($containerIP) $resolvedIP = $containerIP;
-                                        }
-                                        // For bridge/overlay/other → use host IP (default)
-                                        
+                                    } elseif (isset($networkDrivers[$networkMode]) &&
+                                              in_array($networkDrivers[$networkMode], ['macvlan', 'ipvlan'])) {
+                                        // Use container's own routable IP
+                                        $firstNet = reset($networkSettings);
+                                        $containerIP = $firstNet['IPAddress'] ?? '';
+                                        if ($containerIP) $resolvedIP = $containerIP;
+                                    }
+                                    // For bridge/overlay/other → use host IP (default)
+
+                                    // Build port strings with resolved IP
+                                    $portStrings = [];
+                                    foreach ($ports as $p) {
+                                        $lanIp = $resolvedIP ?: $hostIP;
+                                        $portStrings[] = "$lanIp:{$p['hostPort']}->{$p['containerPort']}";
+                                    }
+                                    $container['Ports'] = $portStrings;
+
+                                    if (!empty($webUITemplate) && $hostIP) {
                                         $resolvedURL = preg_replace('%\[IP\]%i', $resolvedIP, $webUITemplate);
                                         
                                         // Resolve [PORT:xxxx] — find host-mapped port for the container port

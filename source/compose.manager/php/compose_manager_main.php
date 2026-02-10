@@ -3612,10 +3612,10 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             var lanPorts = [];
             if (container.Ports && container.Ports.length > 0) {
                 container.Ports.forEach(function(p) {
-                    // Format: "0.0.0.0:8080->80/tcp" or "80/tcp"
+                    // Format: "192.168.1.10:8080->80/tcp" or "80/tcp"
                     var parts = p.split('->');
                     if (parts.length === 2) {
-                        lanPorts.push(parts[0].replace('0.0.0.0:', ''));
+                        lanPorts.push(parts[0]);
                         containerPorts.push(parts[1]);
                     } else {
                         containerPorts.push(p);
