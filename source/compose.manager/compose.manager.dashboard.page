@@ -100,10 +100,13 @@ $styles = <<<EOT
 .compose-dash-expand {
     width: var(--compose-expand-width);
     flex-shrink: 0;
-    transition: transform 0.2s;
     color: #666;
 }
-.compose-dash-expand.expanded { transform: rotate(90deg); }
+.compose-dash-expand::before {
+    display: inline-block;
+    transition: transform 0.2s;
+}
+.compose-dash-expand.expanded::before { transform: rotate(90deg); }
 .compose-dash-icon {
     width: 32px;
     height: 32px;
@@ -161,6 +164,19 @@ $script = <<<'EOT'
         if (window.composeDashDebug) {
             console.log.apply(console, ['[ComposeDash]'].concat(Array.prototype.slice.call(arguments)));
         }
+    }
+
+    // Resolve WebUI URL placeholders for a container
+    // As of this version, WebUI URLs are resolved server-side in exec.php
+    // (matching Unraid's DockerClient logic for IP/PORT resolution).
+    // This function is kept as a fallback for any unresolved placeholders.
+    function resolveContainerWebUI(url) {
+        if (!url) return '';
+        // Fallback: replace any remaining [IP] with hostname
+        url = url.replace(/\[IP\]/gi, window.location.hostname);
+        // Fallback: replace any remaining [PORT:xxxx] with the port number
+        url = url.replace(/\[PORT:(\d+)\]/gi, '$1');
+        return url;
     }
 
     // Smart uptime formatting - single unit, less granularity over time
@@ -391,7 +407,7 @@ $script = <<<'EOT'
                         var ctElId = 'dash-ct-' + ct.ID.substring(0, 12);
                         var imgSrc = ct.Icon || '/plugins/dynamix.docker.manager/images/question.png';
                         var escapedName = ct.Name.replace(/'/g, "\\'");
-                        var webui = (ct.WebUI || '').replace(/'/g, "\\'");
+                        var webui = resolveContainerWebUI(ct.WebUI).replace(/'/g, "\\'");
                         var shell = (ct.Shell || 'sh').replace(/'/g, "\\'");
                         var shortId = ct.ID.substring(0, 12);
                         // Parse image to get repo and tag

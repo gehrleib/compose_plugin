@@ -59,7 +59,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 #compose_stacks .stack-details-cell{width:auto!important}
 #compose_stacks tbody tr.stack-details-row{background-color:rgba(0,0,0,0.08)!important}
 /* Autostart cell */
-#compose_stacks td.nine{white-space:nowrap;padding-right:15px}
+#compose_stacks td.nine{white-space:nowrap;padding-right:20px}
 /* Container sub-table source column: left-align (override theme) */
 .compose-ct-table th:nth-child(3),.compose-ct-table td:nth-child(3){text-align:left!important}
 </style>
@@ -1036,12 +1036,13 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
         return lowerUrl.startsWith('http://') || lowerUrl.startsWith('https://');
     }
 
-    // Process WebUI URL placeholders (like Unraid's Docker WebUI handling)
+    // Process WebUI URL placeholders for stack-level WebUI (where no container context exists)
+    // For container-level WebUI, resolution is done server-side in exec.php
     function processWebUIUrl(url) {
         if (!url) return url;
-        // Replace [IP] with the current server hostname/IP
+        // Replace [IP] with the server hostname/IP (stack-level only)
         url = url.replace(/\[IP\]/gi, window.location.hostname);
-        // Replace [PORT:xxxx] with the specified port (for compatibility with Docker template format)
+        // Replace [PORT:xxxx] with the specified port as-is (no container port mapping at stack level)
         url = url.replace(/\[PORT:(\d+)\]/gi, '$1');
         return url;
     }
@@ -2243,14 +2244,14 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
         // Build HTML content for the dialog
         var html = '<div style="text-align:left;max-width:450px;margin:0 auto;">';
-        html += '<div style="margin-bottom:15px;">' + cfg.description + '</div>';
+        html += '<div style="margin-bottom:18px;">' + cfg.description + '</div>';
 
         // Container list with icons
         if (containers && containers.length > 0) {
-            html += '<div style="background:rgba(0,0,0,0.2);border-radius:4px;padding:10px;margin:10px 0;">';
-            html += '<div style="font-weight:bold;margin-bottom:8px;font-size:0.9em;color:#999;"><i class="fa fa-cubes"></i> ' + cfg.listTitle + '</div>';
+            html += '<div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:12px 14px;margin:12px 0;">';
+            html += '<div style="font-weight:bold;margin-bottom:10px;font-size:0.9em;color:#999;"><i class="fa fa-cubes"></i> ' + cfg.listTitle + '</div>';
 
-            containers.forEach(function(container) {
+            containers.forEach(function(container, index) {
                 var containerName = container.Name || container.Service || 'Unknown';
                 var shortName = containerName.replace(/^[^-]+-/, '');
                 var image = container.Image || '';
@@ -2273,8 +2274,10 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
                 // Grey out containers without updates when showing update dialog
                 var rowOpacity = (cfg.showVersionArrow && !hasUpdate && updateStatus === 'up-to-date') ? '0.5' : '1';
+                var isLast = (index === containers.length - 1);
+                var borderStyle = isLast ? '' : 'border-bottom:1px solid rgba(255,255,255,0.1);';
 
-                html += '<div style="display:flex;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.1);opacity:' + rowOpacity + ';">';
+                html += '<div style="display:flex;align-items:center;padding:8px 4px;' + borderStyle + 'opacity:' + rowOpacity + ';">';
                 html += '<img src="' + iconSrc + '" style="width:28px;height:28px;margin-right:10px;border-radius:4px;" onerror="this.src=\'/plugins/dynamix.docker.manager/images/question.png\'">';
                 html += '<div style="flex:1;">';
                 html += '<div style="font-weight:bold;">' + escapeHtml(shortName);
@@ -2285,22 +2288,22 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     html += ' <span style="color:#3c3;font-size:0.8em;margin-left:6px;"><i class="fa fa-check"></i></span>';
                 }
                 html += '</div>';
-                html += '<div style="font-size:0.85em;color:#999;">';
+                html += '<div style="font-size:0.85em;color:#999;margin-top:2px;">';
                 html += '<i class="fa fa-' + stateIcon + '" style="color:' + stateColor + ';margin-right:4px;"></i>';
-                html += escapeHtml(imageName) + ':<span style="color:#f0a000;">' + escapeHtml(imageTag) + '</span>';
+                html += escapeHtml(imageName) + ' : <span style="color:#f0a000;">' + escapeHtml(imageTag) + '</span>';
 
                 // Show SHA info for update action
                 if (cfg.showVersionArrow) {
                     if (hasUpdate && localSha && remoteSha) {
                         // Has update - show current SHA → new SHA
-                        html += '<br><span style="font-family:monospace;font-size:0.9em;">';
+                        html += '<div style="font-family:monospace;font-size:0.9em;margin-top:2px;">';
                         html += '<span style="color:#f80;" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</span>';
                         html += ' <i class="fa fa-arrow-right" style="margin:0 4px;color:#3c3;"></i> ';
                         html += '<span style="color:#3c3;" title="' + escapeAttr(remoteSha) + '">' + escapeHtml(remoteSha.substring(0, 8)) + '</span>';
-                        html += '</span>';
+                        html += '</div>';
                     } else if (localSha) {
                         // No update - just show current SHA (greyed)
-                        html += '<br><span style="font-family:monospace;font-size:0.9em;color:#666;" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</span>';
+                        html += '<div style="font-family:monospace;font-size:0.9em;color:#666;margin-top:2px;" title="' + escapeAttr(localSha) + '">' + escapeHtml(localSha.substring(0, 8)) + '</div>';
                     }
                 }
                 html += '</div></div></div>';
@@ -2310,7 +2313,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
         }
 
         // Warning/info text
-        html += '<div style="color:' + cfg.warningColor + ';margin-top:10px;font-size:0.9em;"><i class="fa fa-' + cfg.warningIcon + '"></i> ' + cfg.warning + '</div>';
+        html += '<div style="color:' + cfg.warningColor + ';margin-top:14px;font-size:0.9em;"><i class="fa fa-' + cfg.warningIcon + '"></i> ' + cfg.warning + '</div>';
         html += '</div>';
 
         // Use native swal (SweetAlert 1.x) with callback style
@@ -3609,10 +3612,10 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             var lanPorts = [];
             if (container.Ports && container.Ports.length > 0) {
                 container.Ports.forEach(function(p) {
-                    // Format: "0.0.0.0:8080->80/tcp" or "80/tcp"
+                    // Format: "192.168.1.10:8080->80/tcp" or "80/tcp"
                     var parts = p.split('->');
                     if (parts.length === 2) {
-                        lanPorts.push(parts[0].replace('0.0.0.0:', ''));
+                        lanPorts.push(parts[0]);
                         containerPorts.push(parts[1]);
                     } else {
                         containerPorts.push(p);
@@ -3623,9 +3626,10 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             if (lanPorts.length === 0) lanPorts.push('-');
 
             // WebUI
+            // WebUI — already resolved server-side by exec.php
             var webui = '';
             if (container.WebUI) {
-                webui = container.WebUI.replace(/\[IP\]/g, window.location.hostname);
+                webui = container.WebUI;
                 if (!isValidWebUIUrl(webui)) webui = '';
             }
 

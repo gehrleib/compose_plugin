@@ -434,6 +434,25 @@ switch ($_POST['action']) {
         $cmd = "docker compose $files $envFile -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
         $output = shell_exec($cmd);
         
+        // Cache network drivers for resolving network types (bridge vs macvlan/ipvlan)
+        $networkDrivers = [];
+        $netListOutput = shell_exec("docker network ls --format '{{.Name}}\t{{.Driver}}' 2>/dev/null");
+        if ($netListOutput) {
+            foreach (explode("\n", trim($netListOutput)) as $netLine) {
+                $parts = explode("\t", $netLine);
+                if (count($parts) === 2) {
+                    $networkDrivers[$parts[0]] = $parts[1];
+                }
+            }
+        }
+
+        // Get host IP for WebUI resolution (same approach as Unraid's DockerUtil::host())
+        $hostIP = '';
+        foreach (['br0', 'bond0', 'eth0'] as $iface) {
+            $hostIP = trim(shell_exec("ip -br -4 addr show $iface scope global 2>/dev/null | sed -r 's/\/[0-9]+//g' | awk '{print \$3;exit}'"));
+            if ($hostIP) break;
+        }
+
         $containers = [];
         if ($output) {
             // docker compose ps --format json outputs one JSON object per line
@@ -455,21 +474,19 @@ switch ($_POST['action']) {
                                     $container['Created'] = $inspect['Created'] ?? '';
                                     $container['StartedAt'] = $inspect['State']['StartedAt'] ?? '';
                                     
-                                    // Get ports
+                                    // Get ports (raw bindings - IP resolved below after network detection)
                                     $ports = [];
                                     $portBindings = $inspect['HostConfig']['PortBindings'] ?? [];
                                     foreach ($portBindings as $containerPort => $bindings) {
                                         if ($bindings) {
                                             foreach ($bindings as $binding) {
                                                 $hostPort = $binding['HostPort'] ?? '';
-                                                $hostIp = $binding['HostIp'] ?? '0.0.0.0';
                                                 if ($hostPort) {
-                                                    $ports[] = "$hostIp:$hostPort->$containerPort";
+                                                    $ports[] = ['hostPort' => $hostPort, 'containerPort' => $containerPort];
                                                 }
                                             }
                                         }
                                     }
-                                    $container['Ports'] = $ports;
                                     
                                     // Get volumes
                                     $volumes = [];
@@ -484,22 +501,79 @@ switch ($_POST['action']) {
                                     }
                                     $container['Volumes'] = $volumes;
                                     
-                                    // Get network info
+                                    // Get network info (include driver for IP resolution)
                                     $networks = [];
                                     $networkSettings = $inspect['NetworkSettings']['Networks'] ?? [];
                                     foreach ($networkSettings as $netName => $netConfig) {
                                         $networks[] = [
                                             'name' => $netName,
-                                            'ip' => $netConfig['IPAddress'] ?? ''
+                                            'ip' => $netConfig['IPAddress'] ?? '',
+                                            'driver' => $networkDrivers[$netName] ?? ''
                                         ];
                                     }
                                     $container['Networks'] = $networks;
                                     
                                     // Get labels for WebUI
                                     $labels = $inspect['Config']['Labels'] ?? [];
-                                    $container['WebUI'] = $labels[$docker_label_webui] ?? '';
+                                    $webUITemplate = $labels[$docker_label_webui] ?? '';
                                     $container['Icon'] = $labels[$docker_label_icon] ?? '';
                                     $container['Shell'] = $labels[$docker_label_shell] ?? '/bin/sh';
+                                    
+                                    // Resolve WebUI URL server-side (matching Unraid's DockerClient logic)
+                                    // Determine the NetworkMode
+                                    $networkMode = $inspect['HostConfig']['NetworkMode'] ?? 'bridge';
+                                    // For "container:xxx" mode, strip to just the network portion
+                                    if (strpos($networkMode, ':') !== false) {
+                                        [$networkMode] = explode(':', $networkMode);
+                                    }
+                                    
+                                    $container['WebUI'] = '';
+                                    // Resolve IP — Unraid logic:
+                                    // host mode → host IP
+                                    // macvlan/ipvlan → container IP
+                                    // bridge (with port mappings) → host IP
+                                    $resolvedIP = $hostIP;
+                                    if ($networkMode === 'host') {
+                                        $resolvedIP = $hostIP;
+                                    } elseif (isset($networkDrivers[$networkMode]) &&
+                                              in_array($networkDrivers[$networkMode], ['macvlan', 'ipvlan'])) {
+                                        // Use container's own routable IP
+                                        $firstNet = reset($networkSettings);
+                                        $containerIP = $firstNet['IPAddress'] ?? '';
+                                        if ($containerIP) $resolvedIP = $containerIP;
+                                    }
+                                    // For bridge/overlay/other → use host IP (default)
+
+                                    // Build port strings with resolved IP
+                                    $portStrings = [];
+                                    foreach ($ports as $p) {
+                                        $lanIp = $resolvedIP ?: $hostIP;
+                                        $portStrings[] = "$lanIp:{$p['hostPort']}->{$p['containerPort']}";
+                                    }
+                                    $container['Ports'] = $portStrings;
+
+                                    if (!empty($webUITemplate) && $hostIP) {
+                                        $resolvedURL = preg_replace('%\[IP\]%i', $resolvedIP, $webUITemplate);
+                                        
+                                        // Resolve [PORT:xxxx] — find host-mapped port for the container port
+                                        if (preg_match('%\[PORT:(\d+)\]%i', $resolvedURL, $portMatch)) {
+                                            $configPort = $portMatch[1];
+                                            // Look through port bindings for matching container port
+                                            foreach ($portBindings as $ctPort => $bindings) {
+                                                // $ctPort is like "8080/tcp"
+                                                $ctPortNum = preg_replace('/\/.*$/', '', $ctPort);
+                                                if ($ctPortNum === $configPort && $bindings) {
+                                                    $hostPort = $bindings[0]['HostPort'] ?? '';
+                                                    if ($hostPort) {
+                                                        $configPort = $hostPort;
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                            $resolvedURL = preg_replace('%\[PORT:\d+\]%i', $configPort, $resolvedURL);
+                                        }
+                                        $container['WebUI'] = $resolvedURL;
+                                    }
                                     
                                     // Get update status from saved status file
                                     $updateStatusFile = "/var/lib/docker/unraid-update-status.json";
