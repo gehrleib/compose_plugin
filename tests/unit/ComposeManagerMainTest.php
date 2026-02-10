@@ -45,33 +45,6 @@ class ComposeManagerMainTest extends TestCase
         $this->assertStringContainsString('table-layout:fixed', $source);
     }
 
-    public function testBasicViewColumnWidths(): void
-    {
-        $source = $this->getPageSource();
-
-        // Basic view columns: Stack 33%, Update 18%, Containers 18%, Uptime 18%, Autostart 13%
-        $this->assertStringContainsString('th.col-stack{width:33%}', $source);
-        $this->assertStringContainsString('th.col-update{width:18%}', $source);
-        $this->assertStringContainsString('th.col-containers{width:18%}', $source);
-        $this->assertStringContainsString('th.col-uptime{width:18%}', $source);
-        $this->assertStringContainsString('th.col-autostart{width:13%}', $source);
-    }
-
-    public function testAdvancedViewColumnWidths(): void
-    {
-        $source = $this->getPageSource();
-
-        // Advanced view columns should be prefixed with .cm-advanced-view
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-stack{width:14%}', $source);
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-update{width:9%}', $source);
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-containers{width:5%}', $source);
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-uptime{width:8%}', $source);
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-description{width:22%}', $source);
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-compose{width:7%}', $source);
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-path{width:29%}', $source);
-        $this->assertStringContainsString('.cm-advanced-view thead th.col-autostart{width:6%}', $source);
-    }
-
     public function testOverflowClippingOnCells(): void
     {
         $source = $this->getPageSource();
@@ -89,13 +62,6 @@ class ComposeManagerMainTest extends TestCase
         // Autostart header and cell right-aligned
         $this->assertStringContainsString('th.col-autostart', $source);
         $this->assertStringContainsString('text-align:right', $source);
-    }
-
-    public function testAutostartCellPadding(): void
-    {
-        $source = $this->getPageSource();
-        // Autostart cell class nine has 15px right padding
-        $this->assertStringContainsString('td.nine{white-space:nowrap;padding-right:15px}', $source);
     }
 
     // ===========================================

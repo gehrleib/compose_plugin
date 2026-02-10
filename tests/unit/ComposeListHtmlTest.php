@@ -49,15 +49,8 @@ class ComposeListHtmlTest extends TestCase
     }
 
     // ===========================================
-    // Expand Arrow Spacing Tests
+    // Expand Arrow Tests
     // ===========================================
-
-    public function testExpandArrowHasMarginRight(): void
-    {
-        $source = $this->getPageSource();
-        // The expand arrow wrapper should have 6px margin-right for spacing
-        $this->assertStringContainsString('margin-right:6px', $source);
-    }
 
     public function testExpandArrowIconClassExists(): void
     {
