@@ -520,7 +520,7 @@ switch ($_POST['action']) {
                                     $labels = $inspect['Config']['Labels'] ?? [];
                                     $webUITemplate = $labels[$docker_label_webui] ?? '';
                                     $container['Icon'] = $labels[$docker_label_icon] ?? '';
-                                    $container['Shell'] = $labels[$docker_label_shell] ?? '/bin/sh';
+                                    $container['Shell'] = $labels[$docker_label_shell] ?? '/bin/bash';
 
                                     // Resolve WebUI URL server-side (matching Unraid's DockerClient logic)
                                     // Determine the NetworkMode
