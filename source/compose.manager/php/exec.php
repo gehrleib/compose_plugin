@@ -71,8 +71,8 @@ switch ($_POST['action']) {
         }
 
         // Return project info for opening the editor
-        $projectName = basename($folder);
-        echo json_encode(['result' => 'success', 'message' => '', 'project' => $folder, 'projectName' => $projectName]);
+        $projectDir = basename($folder);
+        echo json_encode(['result' => 'success', 'message' => '', 'project' => $projectDir, 'projectName' => $stackName]);
         break;
     case 'deleteStack':
         $stackName = isset($_POST['stackName']) ? urldecode(($_POST['stackName'])) : "";
