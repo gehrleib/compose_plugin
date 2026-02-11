@@ -264,29 +264,45 @@ $script = <<<'EOT'
     }
 
     function stackAction(stackName, action) {
+        // Map dashboard action names to compose_util.php action names
+        var actionMap = {
+            'start': 'composeUp',
+            'stop': 'composeStop',
+            'restart': 'composeUpRecreate'
+        };
+        var apiAction = actionMap[action] || ('compose' + action.charAt(0).toUpperCase() + action.slice(1));
+        var actionTitle = action.charAt(0).toUpperCase() + action.slice(1);
         var $status = $('#compose_stacks_status');
-        $status.text(action.charAt(0).toUpperCase() + action.slice(1) + 'ing ' + stackName + '...');
+        $status.text(actionTitle + 'ing ' + stackName + '...');
 
         $.post('/plugins/compose.manager/php/compose_util.php', {
-            action: 'compose' + action.charAt(0).toUpperCase() + action.slice(1),
+            action: apiAction,
             path: '/boot/config/plugins/compose.manager/projects/' + stackName
-        }, function() {
-            setTimeout(loadComposeStacks, 1000);
+        }, function(data) {
+            if (data) {
+                if (typeof openBox === 'function') {
+                    openBox(data, actionTitle + ' Stack ' + stackName, 800, 1200, true);
+                } else {
+                    Shadowbox.open({content: data, player: 'iframe', title: actionTitle + ' Stack ' + stackName, height: 800, width: 1200});
+                }
+            }
+            // Refresh stacks after a delay to allow command to take effect
+            setTimeout(function() { stackContainerCache = {}; loadComposeStacks(); }, 3000);
         });
     }
 
     function openStackLogs(stackName) {
-        // Open combined logs for the stack using the same approach as the Compose page
+        // Open combined logs for the stack in a new window
         var projectPath = '/boot/config/plugins/compose.manager/projects/' + stackName;
         $.post('/plugins/compose.manager/php/compose_util.php', {
             action: 'composeLogs',
             path: projectPath
         }, function(data) {
-            if (data && typeof openBox === 'function') {
-                openBox(data, 'Stack ' + stackName + ' Logs', 800, 1200, true);
-            } else if (data) {
-                // Fallback: open in shadowbox or new window
-                Shadowbox.open({content: data, player: 'iframe', title: 'Stack ' + stackName + ' Logs', height: 800, width: 1200});
+            if (data) {
+                var h = Math.min(screen.availHeight, 800);
+                var w = Math.min(screen.availWidth, 1200);
+                window.open(data, 'Logs_' + stackName.replace(/[^a-zA-Z0-9]/g, '_'),
+                    'height=' + h + ',width=' + w + ',resizable=yes,scrollbars=yes');
             }
         });
     }
@@ -325,16 +341,16 @@ $script = <<<'EOT'
             opts.push({divider:true});
             opts.push({text:'Stop', icon:'fa-stop', action:function(e){
                 e.preventDefault();
-                dockerAction(ctId, 'stop');
+                dockerAction(ctName, 'stop');
             }});
             opts.push({text:'Restart', icon:'fa-refresh', action:function(e){
                 e.preventDefault();
-                dockerAction(ctId, 'restart');
+                dockerAction(ctName, 'restart');
             }});
         } else {
             opts.push({text:'Start', icon:'fa-play', action:function(e){
                 e.preventDefault();
-                dockerAction(ctId, 'start');
+                dockerAction(ctName, 'start');
             }});
         }
 
@@ -344,29 +360,53 @@ $script = <<<'EOT'
     }
     window.addContainerContext = addContainerContext;
 
-    function dockerAction(ctId, action) {
-        debugLog('dockerAction:', ctId, action);
-        $.post('/plugins/dynamix.docker.manager/include/Events.php', {
-            action: 'docker_' + action,
-            container: ctId
+    function dockerAction(ctName, action) {
+        debugLog('dockerAction:', ctName, action);
+        $.post(caURL, {
+            action: 'containerAction',
+            container: ctName,
+            containerAction: action
         }, function() {
-            // Refresh after a short delay
-            setTimeout(loadComposeStacks, 1500);
+            // exec.php runs docker commands synchronously, so this fires after completion
+            if (!window.hideDockerComposeContainers && typeof window.loadlist === 'function') {
+                // Compose containers are visible in Docker tile — loadlist() refreshes it,
+                // and our loadlist hook (below) will also trigger loadComposeStacks()
+                window.loadlist();
+            } else {
+                // Compose containers hidden from Docker tile — only refresh our stacks (faster)
+                loadComposeStacks();
+            }
         });
     }
 
-    // Open terminal - call global openTerminal (from Unraid's HeadInlineJS.php)
-    // For logs: openTerminal('docker', containerName, '.log')
-    // For console: openTerminal('docker', containerName, shell)
     function openDockerTerminal(name, isLogs, shell) {
-        if (typeof window.openTerminal === 'function') {
-            window.openTerminal('docker', name, isLogs ? '.log' : (shell || '/bin/bash'));
+        if (isLogs) {
+            // Logs — start ttyd via plugin, open in new window (same as stack logs)
+            $.post('/plugins/compose.manager/php/compose_util.php', {
+                action: 'containerLogs',
+                container: name
+            }, function(data) {
+                if (data) {
+                    var h = Math.min(screen.availHeight, 800);
+                    var w = Math.min(screen.availWidth, 1200);
+                    window.open(data, 'Logs_' + name.replace(/[^a-zA-Z0-9]/g, '_'),
+                        'height=' + h + ',width=' + w + ',resizable=yes,scrollbars=yes');
+                }
+            });
         } else {
-            // Fallback if global function not available
-            var url = isLogs
-                ? '/logterminal/' + name.replace(/[ #]/g, '_') + '.log/'
-                : '/webterminal/docker/';
-            window.open(url, '_blank');
+            // Console — start writable ttyd via plugin, open directly
+            $.post('/plugins/compose.manager/php/compose_util.php', {
+                action: 'containerConsole',
+                container: name,
+                shell: shell || '/bin/bash'
+            }, function(data) {
+                if (data) {
+                    var h = Math.min(screen.availHeight, 800);
+                    var w = Math.min(screen.availWidth, 1200);
+                    window.open(data, 'Console_' + name.replace(/[^a-zA-Z0-9]/g, '_'),
+                        'height=' + h + ',width=' + w + ',resizable=yes,scrollbars=yes');
+                }
+            });
         }
     }
 
@@ -464,12 +504,16 @@ $script = <<<'EOT'
             if (data.partial > 0) statusText += ', Partial: ' + data.partial;
             $('#compose_stacks_status').text(statusText);
 
+            // Clear container cache since DOM will be rebuilt
+            stackContainerCache = {};
+
             var html = '';
             if (data.stacks.length === 0) {
                 html = '<div class="compose-dash-loading">No compose stacks defined</div>';
             } else {
                 data.stacks.forEach(function(stack, idx) {
-                    var stackId = 'stack-' + idx;
+                    // Use folder name for stable IDs (survives DOM rebuilds)
+                    var stackId = 'stack-' + stack.folder.replace(/[^a-zA-Z0-9_-]/g, '_');
                     var state = stack.state;
                     var stateIcon = state === 'started' ? 'fa-play' :
                                    (state === 'partial' ? 'fa-exclamation-circle' : 'fa-square');
@@ -520,6 +564,27 @@ $script = <<<'EOT'
 
             $('#compose_dash_content').html(html);
 
+            // Restore expanded stacks after DOM rebuild
+            Object.keys(expandedStacks).forEach(function(stackId) {
+                if (expandedStacks[stackId]) {
+                    var $containers = $('#compose-dash-ct-' + stackId);
+                    var $icon = $('#compose-dash-exp-' + stackId);
+                    if ($containers.length) {
+                        $containers.addClass('expanded');
+                        $icon.addClass('expanded');
+                        // Re-fetch container data since DOM was rebuilt
+                        // containers div is a sibling after the stack div, not a child
+                        var folder = $containers.prev('.compose-dash-stack').data('folder');
+                        if (folder) {
+                            loadStackContainers(stackId, folder);
+                        }
+                    } else {
+                        // Stack no longer exists, clean up
+                        delete expandedStacks[stackId];
+                    }
+                }
+            });
+
             // Attach row click handlers using event delegation (allows context menu clicks to bubble)
             $('#compose_dash_content').off('click', '.compose-dash-stack').on('click', '.compose-dash-stack', function(e) {
                 // Don't toggle if clicking on icon (context menu trigger)
@@ -546,12 +611,12 @@ $script = <<<'EOT'
                 $('.compose-dash-stack.stopped').hide();
             }
             noStacks();
-            
+
             // Hide compose-managed containers from the Docker Containers dashboard tile
             if (window.hideDockerComposeContainers && data.composeContainerNames && data.composeContainerNames.length > 0) {
                 setupComposeContainerHiding(data.composeContainerNames);
             }
-            
+
             debugLog('Loaded', data.stacks.length, 'stacks, context menus attached via onclick');
         }, 'json').fail(function() {
             $('#compose_stacks_status').text('Stacks -- Error loading');
@@ -575,29 +640,29 @@ $script = <<<'EOT'
         }
     }
     window.noStacks = noStacks;
-    
+
     // Hide compose-managed containers from Unraid's Docker Containers dashboard tile.
     // Docker containers load asynchronously via loadlist() -> $.post('DashboardApps.php')
     // We use $(document).ajaxComplete() to detect when Docker containers are loaded,
     // and a CSS class with !important to prevent jQuery animations from re-showing elements.
     var composeContainerNameSet = null;
     var hideContainersSetup = false;
-    
+
     function setupComposeContainerHiding(containerNames) {
         if (!containerNames || containerNames.length === 0) return;
-        
+
         debugLog('Setting up compose container hiding for:', containerNames);
         console.log('[ComposeManager] Container names to hide:', containerNames);
-        
+
         // Build a lookup object for fast case-insensitive matching
         composeContainerNameSet = {};
         containerNames.forEach(function(n) { composeContainerNameSet[n.toLowerCase()] = true; });
-        
+
         // Inject CSS class for hiding (uses !important to override jQuery animations like hideMe)
         if (!$('#compose-hide-style').length) {
             $('head').append('<style id="compose-hide-style">.compose-hidden-container { display: none !important; }</style>');
         }
-        
+
         // Only set up the ajaxComplete handler once
         if (!hideContainersSetup) {
             hideContainersSetup = true;
@@ -612,7 +677,7 @@ $script = <<<'EOT'
                 }
             });
         }
-        
+
         // Fallback: run several times in case Docker loaded before us
         doHideContainers();
         setTimeout(doHideContainers, 500);
@@ -620,20 +685,20 @@ $script = <<<'EOT'
         setTimeout(doHideContainers, 3000);
         setTimeout(doHideContainers, 5000);
     }
-    
+
     function doHideContainers() {
         if (!composeContainerNameSet) return;
-        
+
         var $dockerView = $('#docker_view');
         if (!$dockerView.length) return;
-        
+
         var hiddenCount = 0;
         // DashboardApps.php renders: <span class="outer solid apps started/stopped/paused">
         $dockerView.find('span.outer.apps').each(function() {
             var $el = $(this);
             // Skip if we already hid this element
             if ($el.hasClass('compose-hidden-container')) return;
-            
+
             var name = extractContainerName($el);
             if (name && composeContainerNameSet[name.toLowerCase()]) {
                 debugLog('Hiding Docker tile container:', name);
@@ -642,13 +707,13 @@ $script = <<<'EOT'
                 hiddenCount++;
             }
         });
-        
+
         if (hiddenCount > 0) {
             debugLog('Hidden', hiddenCount, 'compose containers from Docker tile');
             updateDockerTileCounts();
         }
     }
-    
+
     function extractContainerName($el) {
         // Strategy 1: Parse onclick="addDockerContainerContext('ContainerName','ImageId',...)"
         // from child <span id="..." class="hand"> element
@@ -662,7 +727,7 @@ $script = <<<'EOT'
             var match = onclick.match(/addDockerContainerContext\(\s*'([^']+)'/);
             if (match) return match[1];
         }
-        
+
         // Strategy 2: Inner span text
         // DashboardApps.php renders: <span class="inner"><span class="...">ContainerName</span>...
         var $inner = $el.find('span.inner > span').first();
@@ -670,10 +735,10 @@ $script = <<<'EOT'
             var t = $inner.text().trim();
             if (t) return t;
         }
-        
+
         return null;
     }
-    
+
     function updateDockerTileCounts() {
         // Recalculate visible Docker container counts excluding hidden compose containers
         var started = $('#docker_view').find('span.outer.apps.started').not('.compose-hidden-container').length;
@@ -681,7 +746,7 @@ $script = <<<'EOT'
         var paused  = $('#docker_view').find('span.outer.apps.paused').not('.compose-hidden-container').length;
         $('.apps.switch').html("Containers -- Started: " + started + ", Stopped: " + stopped + ", Paused: " + paused);
     }
-    
+
     $(function() {
         // Initialize toggle switch (like Docker's apps toggle)
         var cookie = (typeof $.cookie === 'function' && $.cookie('unraid_settings')) ? JSON.parse($.cookie('unraid_settings')) : {};

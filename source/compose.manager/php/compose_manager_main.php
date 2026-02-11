@@ -15,6 +15,9 @@ $autoCheckDays = floatval($cfg['AUTO_CHECK_UPDATES_DAYS'] ?? '1');
 $showComposeOnTop = ($cfg['SHOW_COMPOSE_ON_TOP'] ?? 'false') === 'true';
 $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true';
 
+// Get Docker Compose CLI version
+$composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') ?? '');
+
 // Note: Stack list is now loaded asynchronously via compose_list.php
 // This improves page load time by deferring expensive docker commands
 ?>
@@ -24,44 +27,116 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
    are applied synchronously BEFORE any HTML renders — prevents FOUC.
    Non-critical styles remain in comboButton.css loaded via <link>. */ ?>
 <style>
-/* Table structure — always fixed layout */
-#compose_stacks{width:100%;table-layout:fixed}
-/* Clip overflowing content in fixed-layout cells */
-#compose_stacks th,#compose_stacks td{overflow:hidden;text-overflow:ellipsis}
-/* Basic-view column widths (5 visible columns → 100%)
+    /* Table structure — always fixed layout */
+    #compose_stacks {
+        width: 100%;
+        table-layout: fixed
+    }
+
+    /* Clip overflowing content in fixed-layout cells */
+    #compose_stacks th,
+    #compose_stacks td {
+        overflow: hidden;
+        text-overflow: ellipsis
+    }
+
+    /* Basic-view column widths (5 visible columns → 100%)
    Middle 3 columns equal width; Stack + Autostart bookend. */
-#compose_stacks thead th.col-stack{width:33%}
-#compose_stacks thead th.col-update{width:18%}
-#compose_stacks thead th.col-containers{width:18%}
-#compose_stacks thead th.col-uptime{width:18%}
-#compose_stacks thead th.col-autostart{width:13%}
-/* Advanced-view column widths (8 visible columns → 100%)
+    #compose_stacks thead th.col-stack {
+        width: 33%
+    }
+
+    #compose_stacks thead th.col-update {
+        width: 18%
+    }
+
+    #compose_stacks thead th.col-containers {
+        width: 18%
+    }
+
+    #compose_stacks thead th.col-uptime {
+        width: 18%
+    }
+
+    #compose_stacks thead th.col-autostart {
+        width: 13%
+    }
+
+    /* Advanced-view column widths (8 visible columns → 100%)
    Description + Path get the most space; compact everything else. */
-#compose_stacks.cm-advanced-view thead th.col-stack{width:14%}
-#compose_stacks.cm-advanced-view thead th.col-update{width:9%}
-#compose_stacks.cm-advanced-view thead th.col-containers{width:5%}
-#compose_stacks.cm-advanced-view thead th.col-uptime{width:8%}
-#compose_stacks.cm-advanced-view thead th.col-description{width:22%}
-#compose_stacks.cm-advanced-view thead th.col-compose{width:7%}
-#compose_stacks.cm-advanced-view thead th.col-path{width:29%}
-#compose_stacks.cm-advanced-view thead th.col-autostart{width:6%}
-/* Center the Containers column */
-#compose_stacks thead th.col-containers,
-#compose_stacks tbody td:nth-child(3){text-align:center}
-/* Autostart column: right-align content to push toggles to edge */
-#compose_stacks thead th.col-autostart,
-#compose_stacks > tbody > tr > td:last-child{text-align:right}
-/* Advanced/basic visibility — CSS-only so no flash of hidden content */
-#compose_stacks .cm-advanced{display:none}
-#compose_stacks.cm-advanced-view .cm-advanced{display:table-cell}
-#compose_stacks.cm-advanced-view div.cm-advanced{display:block}
-/* Detail row */
-#compose_stacks .stack-details-cell{width:auto!important}
-#compose_stacks tbody tr.stack-details-row{background-color:rgba(0,0,0,0.08)!important}
-/* Autostart cell */
-#compose_stacks td.nine{white-space:nowrap;padding-right:20px}
-/* Container sub-table source column: left-align (override theme) */
-.compose-ct-table th:nth-child(3),.compose-ct-table td:nth-child(3){text-align:left!important}
+    #compose_stacks.cm-advanced-view thead th.col-stack {
+        width: 14%
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-update {
+        width: 9%
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-containers {
+        width: 5%
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-uptime {
+        width: 8%
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-description {
+        width: 26%
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-path {
+        width: 32%
+    }
+
+    #compose_stacks.cm-advanced-view thead th.col-autostart {
+        width: 6%
+    }
+
+    /* Center the Containers column */
+    #compose_stacks thead th.col-containers,
+    #compose_stacks tbody td:nth-child(3) {
+        text-align: center
+    }
+
+    /* Autostart column: right-align content to push toggles to edge */
+    #compose_stacks thead th.col-autostart,
+    #compose_stacks>tbody>tr>td:last-child {
+        text-align: right
+    }
+
+    /* Advanced/basic visibility — CSS-only so no flash of hidden content */
+    #compose_stacks .cm-advanced {
+        display: none
+    }
+
+    #compose_stacks.cm-advanced-view .cm-advanced {
+        display: table-cell
+    }
+
+    #compose_stacks.cm-advanced-view div.cm-advanced {
+        display: block
+    }
+
+    /* Detail row */
+    #compose_stacks .stack-details-cell {
+        width: auto !important
+    }
+
+    #compose_stacks tbody tr.stack-details-row {
+        background-color: rgba(0, 0, 0, 0.08) !important
+    }
+
+    /* Autostart cell */
+    #compose_stacks td.nine {
+        white-space: nowrap;
+        padding-right: 20px
+    }
+
+    /* Container sub-table source column: left-align (override theme) */
+    .compose-ct-table th:nth-child(3),
+    .compose-ct-table td:nth-child(3) {
+        text-align: left !important
+    }
 </style>
 
 <script src="/plugins/compose.manager/javascript/ace/ace.js" type="text/javascript"></script>
@@ -80,6 +155,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
     var autoCheckDays = <?php echo json_encode($autoCheckDays); ?>;
     var showComposeOnTop = <?php echo json_encode($showComposeOnTop); ?>;
     var hideComposeFromDocker = <?php echo json_encode($hideComposeFromDocker); ?>;
+    var composeCliVersion = <?php echo json_encode($composeVersion); ?>;
 
     // Timers for async operations (plugin-specific to avoid collision with Unraid's global timers)
     var composeTimers = {};
@@ -214,7 +290,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             } catch (e) {}
             clearTimeout(composeTimers.load);
             $('#compose-local-spinner').fadeOut('fast');
-            $('#compose_list').html('<tr><td colspan="8" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
+            $('#compose_list').html('<tr><td colspan="7" style="text-align:center;padding:20px;color:#c00;">Failed to load stack list. Please refresh the page.</td></tr>');
         });
     }
 
@@ -868,8 +944,17 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             isRunning = stateText.indexOf('started') !== -1 || stateText.indexOf('partial') !== -1;
         }
 
-        if (!isRunning) {
-            // Stack is not running - show stopped status
+        // If the stack is stopped and we have no previously-checked update
+        // data, show "stopped".  But if a prior update check produced valid
+        // container info (images are still on disk), display it — the SHA
+        // comparison is still accurate even when the stack isn't running.
+        var hasCheckedData = stackInfo.containers && stackInfo.containers.length > 0 &&
+            stackInfo.containers.some(function(ct) {
+                return ct.hasUpdate !== undefined || ct.localSha || ct.updateStatus;
+            });
+
+        if (!isRunning && !hasCheckedData) {
+            // Stack is not running and no prior update info - show stopped
             $updateCell.html('<span class="grey-text" style="white-space:nowrap;"><i class="fa fa-stop fa-fw"></i> stopped</span>');
             return;
         }
@@ -1073,24 +1158,44 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 $table.addClass('cm-advanced-view');
                 var endHeight = $table.outerHeight();
 
-                $table.css({ height: startHeight, overflow: 'hidden' })
-                      .animate({ height: endHeight }, 400);
-                $changing.animate({ opacity: 1 }, 400).promise().done(function() {
-                    $table.css({ height: '', overflow: '' });
+                $table.css({
+                        height: startHeight,
+                        overflow: 'hidden'
+                    })
+                    .animate({
+                        height: endHeight
+                    }, 400);
+                $changing.animate({
+                    opacity: 1
+                }, 400).promise().done(function() {
+                    $table.css({
+                        height: '',
+                        overflow: ''
+                    });
                     $changing.css('opacity', '');
                 });
             } else {
                 // Hiding advanced columns: fade out, then remove class
                 var startHeight = $table.outerHeight();
-                $changing.animate({ opacity: 0 }, 300).promise().done(function() {
+                $changing.animate({
+                    opacity: 0
+                }, 300).promise().done(function() {
                     $table.removeClass('cm-advanced-view');
                     var endHeight = $table.outerHeight();
 
-                    $table.css({ height: startHeight, overflow: 'hidden' })
-                          .animate({ height: endHeight }, 400, function() {
-                              $table.css({ height: '', overflow: '' });
-                              $changing.css('opacity', '');
-                          });
+                    $table.css({
+                            height: startHeight,
+                            overflow: 'hidden'
+                        })
+                        .animate({
+                            height: endHeight
+                        }, 400, function() {
+                            $table.css({
+                                height: '',
+                                overflow: ''
+                            });
+                            $changing.css('opacity', '');
+                        });
                 });
             }
         } else {
@@ -1162,6 +1267,16 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 $('#compose_stacks').before(standaloneToggle);
             }
         }
+        // Inject Compose CLI version next to the page title
+        if (composeCliVersion) {
+            $('div.content').children('div.title').each(function() {
+                var txt = $(this).text().trim();
+                if (/Compose/i.test(txt) && !/Docker\s*Containers/i.test(txt)) {
+                    $(this).append(' <span style="font-size:0.75em;color:#606060;font-weight:normal;vertical-align:middle;">v' + escapeHtml(composeCliVersion) + '</span>');
+                }
+            });
+        }
+
         // Initialize the Advanced/Basic view toggle.
         // labels_placement:'left' puts both labels to the left of the slider.
         // The plugin shows only the active label: "Basic View" (white) when
@@ -1214,6 +1329,18 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
                             // If there are stacks queued for compose list reload (start/stop), trigger a reload
                             if (pendingComposeReloadStacks.length > 0) {
+                                // Immediately replace stale update-column text with a
+                                // loading spinner so the user never sees outdated "stopped"
+                                pendingComposeReloadStacks.forEach(function(project) {
+                                    var $row = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]');
+                                    if ($row.length) {
+                                        $row.find('.compose-updatecolumn').html(
+                                            '<span class="grey-text" style="white-space:nowrap;"><i class="fa fa-refresh fa-spin fa-fw"></i> loading…</span>'
+                                        );
+                                    }
+                                });
+                                // Tell the loadlist hook to skip composeLoadlist once
+                                skipNextComposeLoadlist = true;
                                 // Schedule a debounced processor to handle pending compose reloads
                                 try {
                                     composeClientDebug('eboxObserver:pending-compose-reloads', {
@@ -1276,6 +1403,13 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     window.loadlist = function() {
                         originalLoadlist.apply(this, arguments);
 
+                        // Skip compose reload if refreshStackRow is already handling it
+                        if (pendingComposeRefreshCount > 0 || skipNextComposeLoadlist) {
+                            composeClientDebug('hookLoadlist: suppressed composeLoadlist (pending=' + pendingComposeRefreshCount + ', skip=' + skipNextComposeLoadlist + ')');
+                            skipNextComposeLoadlist = false;
+                            return;
+                        }
+
                         if (isComposePanelVisible()) {
                             // Visible — refresh with debounce
                             clearTimeout(composeRefreshTimer);
@@ -1300,7 +1434,9 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     if (wrapLoadlist()) clearInterval(hookInterval);
                 }, 500);
                 // Give up after 30s
-                setTimeout(function() { clearInterval(hookInterval); }, 30000);
+                setTimeout(function() {
+                    clearInterval(hookInterval);
+                }, 30000);
             }
 
             // Tabbed mode: watch for tab switches to flush stale data
@@ -1313,7 +1449,10 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                         }
                     });
                 });
-                panelObserver.observe(tabPanel, { attributes: true, attributeFilter: ['style'] });
+                panelObserver.observe(tabPanel, {
+                    attributes: true,
+                    attributeFilter: ['style']
+                });
             }
         })();
     });
@@ -1372,7 +1511,9 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             var modal = document.getElementById('compose-stack-modal-overlay');
             if (modal) {
                 var btns = modal.querySelectorAll('button');
-                btns.forEach(function(btn) { btn.disabled = true; });
+                btns.forEach(function(btn) {
+                    btn.disabled = true;
+                });
             }
             $.post(
                 caURL, {
@@ -1873,6 +2014,13 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
     // Track stacks that need update check after operation completes
     // Using array to support Update All Stacks operation
     var pendingUpdateCheckStacks = [];
+    // >0 while refreshStackRow AJAX calls are in-flight; the loadlist
+    // hook skips composeLoadlist until all pending refreshes complete.
+    var pendingComposeRefreshCount = 0;
+    // One-shot flag: consumed by the loadlist hook so the very next
+    // loadlist call skips composeLoadlist even if refreshStackRow
+    // already completed before loadlist fires.
+    var skipNextComposeLoadlist = false;
     // Track stacks that need a full compose list reload after start/stop operations
     var pendingComposeReloadStacks = [];
     // Timer for batching compose reloads to avoid duplicate refreshes
@@ -1917,11 +2065,12 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             return;
         }
 
-        // Otherwise update each parent row from cached container details
+        // Fetch fresh container data from server, then update each parent row.
+        // The cache is stale after compose up/down so we must re-fetch.
         reloadStacks.forEach(function(project) {
             try {
                 var stackId = $('#compose_stacks tr.compose-sortable[data-project="' + project + '"]').attr('id').replace('stack-row-', '');
-                updateParentStackFromContainers(stackId, project);
+                refreshStackRow(stackId, project);
             } catch (e) {
                 try {
                     composeClientDebug('processPendingComposeReloads:update-failed', {
@@ -1930,6 +2079,67 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     });
                 } catch (ex) {}
             }
+        });
+    }
+
+    // Fetch fresh container data from server and update the parent stack row.
+    // Unlike updateParentStackFromContainers() which uses stale cache, this
+    // always makes an AJAX call to get current container states.
+    function refreshStackRow(stackId, project) {
+        pendingComposeRefreshCount++;
+        $.post(caURL, {
+            action: 'getStackContainers',
+            script: project
+        }, function(data) {
+            if (data) {
+                try {
+                    var response = JSON.parse(data);
+                    if (response.result === 'success') {
+                        var containers = response.containers || [];
+                        // Normalize PascalCase keys
+                        containers.forEach(function(c) {
+                            if (c.UpdateStatus !== undefined && c.updateStatus === undefined) c.updateStatus = c.UpdateStatus;
+                            if (c.LocalSha !== undefined && c.localSha === undefined) c.localSha = c.LocalSha;
+                            if (c.RemoteSha !== undefined && c.remoteSha === undefined) c.remoteSha = c.RemoteSha;
+                            if (c.hasUpdate === undefined && c.updateStatus) {
+                                c.hasUpdate = (c.updateStatus === 'update-available');
+                            }
+                        });
+                        // Merge saved update status so we don't lose checked info
+                        if (stackUpdateStatus[project] && stackUpdateStatus[project].containers) {
+                            containers.forEach(function(container) {
+                                var cName = container.Name || container.Service;
+                                stackUpdateStatus[project].containers.forEach(function(update) {
+                                    if (cName === (update.container || update.name || update.service)) {
+                                        if (update.hasUpdate !== undefined) container.hasUpdate = update.hasUpdate;
+                                        if (update.updateStatus || update.status) container.updateStatus = update.status || update.updateStatus;
+                                        if (update.localSha) container.localSha = update.localSha;
+                                        if (update.remoteSha) container.remoteSha = update.remoteSha;
+                                        if (update.isPinned !== undefined) container.isPinned = update.isPinned;
+                                    }
+                                });
+                            });
+                        }
+                        // Update cache with fresh data
+                        stackContainersCache[stackId] = containers;
+                        // Now update the row using the fresh cache
+                        updateParentStackFromContainers(stackId, project);
+                        // If details are expanded, refresh them too
+                        if (expandedStacks[stackId]) {
+                            renderContainerDetails(stackId, containers, project);
+                        }
+                    }
+                } catch (e) {
+                    composeClientDebug('refreshStackRow:parse-error', { project: project, err: e.toString() });
+                    // Fallback: update from whatever cache we have
+                    updateParentStackFromContainers(stackId, project);
+                }
+            }
+            pendingComposeRefreshCount = Math.max(0, pendingComposeRefreshCount - 1);
+        }).fail(function() {
+            // On network failure, fall back to cache-based update
+            updateParentStackFromContainers(stackId, project);
+            pendingComposeRefreshCount = Math.max(0, pendingComposeRefreshCount - 1);
         });
     }
 
@@ -2247,35 +2457,35 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
         // Action-specific configuration
         var config = {
             'up': {
-                title: 'Start Stack?',
+                title: 'Start ' + escapeHtml(stackName) + '?',
                 description: 'This will start all containers in <b>' + escapeHtml(stackName) + '</b>.',
                 listTitle: 'CONTAINERS TO START',
                 warning: 'Images will be pulled if not present locally.',
                 warningIcon: 'info-circle',
                 warningColor: '#08f',
-                confirmText: 'Yes, start stack',
+                confirmText: 'Start Stack',
                 showVersionArrow: false,
                 confirmedFn: ComposeUpConfirmed
             },
             'down': {
-                title: 'Stop Stack?',
-                description: 'This will stop and remove all containers in <b>' + escapeHtml(stackName) + '</b>.',
+                title: 'Stop ' + escapeHtml(stackName) + '?',
+                description: 'This will shut down all containers in <b>' + escapeHtml(stackName) + '</b>.',
                 listTitle: 'CONTAINERS TO STOP',
-                warning: 'Containers will be stopped and removed. Data in volumes will be preserved.',
+                warning: 'Containers will be removed but data in volumes is preserved.',
                 warningIcon: 'exclamation-triangle',
                 warningColor: '#f80',
-                confirmText: 'Yes, stop stack',
+                confirmText: 'Stop Stack',
                 showVersionArrow: false,
                 confirmedFn: ComposeDownConfirmed
             },
             'update': {
-                title: 'Update Stack?',
+                title: 'Update ' + escapeHtml(stackName) + '?',
                 description: 'This will pull the latest images and recreate containers in <b>' + escapeHtml(stackName) + '</b>.',
                 listTitle: 'CONTAINERS TO UPDATE',
-                warning: 'Running containers will be briefly interrupted.',
+                warning: 'Running containers will be recreated with the latest images.',
                 warningIcon: 'exclamation-triangle',
                 warningColor: '#f80',
-                confirmText: 'Yes, update stack',
+                confirmText: 'Update Stack',
                 showVersionArrow: true,
                 confirmedFn: UpdateStackConfirmed
             }
@@ -2389,8 +2599,8 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
     }
 
     function ComposeLogs(pathOrProject, profile = "") {
-        var height = 800;
-        var width = 1200;
+        var height = Math.min(screen.availHeight, 800);
+        var width = Math.min(screen.availWidth, 1200);
         // Support both project name (legacy) and path
         var path = pathOrProject.includes('/') ? pathOrProject : compose_root + "/" + pathOrProject;
         $.post(compURL, {
@@ -2399,7 +2609,8 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             profile: profile
         }, function(data) {
             if (data) {
-                openBox(data, "Stack " + basename(path) + " Logs", height, width, true);
+                window.open(data, 'Logs_' + basename(path),
+                    'height=' + height + ',width=' + width + ',resizable=yes,scrollbars=yes');
             }
         })
     }
@@ -3747,10 +3958,10 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(escapeHtml).join('<br>') + '</span></td>';
 
             // Container Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.slice(0, 3).map(escapeHtml).join('<br>') + (containerPorts.length > 3 ? '<br>...' : '') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(escapeHtml).join('<br>') + '</span></td>';
 
             // LAN IP:Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.slice(0, 3).map(escapeHtml).join('<br>') + (lanPorts.length > 3 ? '<br>...' : '') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.map(escapeHtml).join('<br>') + '</span></td>';
 
             html += '</tr>';
         });
@@ -3888,7 +4099,9 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     });
                 });
                 // Recompute hasUpdate from merged containers
-                stackInfo.hasUpdate = stackInfo.containers.some(function(c) { return c.hasUpdate; });
+                stackInfo.hasUpdate = stackInfo.containers.some(function(c) {
+                    return c.hasUpdate;
+                });
             }
 
             // Cache the merged update status and apply UI update
@@ -4031,22 +4244,23 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             });
         }
 
-        // Console (if running) — ttyd + Shadowbox (same proven mechanism used for stack operations)
+        // Console (if running) — start writable ttyd, open in new window
         if (running) {
             opts.push({
                 text: 'Console',
                 icon: 'fa-terminal',
                 action: function(e) {
                     e.preventDefault();
-                    $.post(compURL, {action: 'containerConsole', container: containerName, shell: shell}, function(data) {
+                    $.post(compURL, {
+                        action: 'containerConsole',
+                        container: containerName,
+                        shell: shell
+                    }, function(data) {
                         if (data) {
                             var height = Math.min(screen.availHeight, 800);
-                            var width  = Math.min(screen.availWidth, 1200);
-                            if (typeof openBox === 'function') {
-                                openBox(data, 'Console: ' + containerName, height, width, true);
-                            } else {
-                                Shadowbox.open({content: data, player: 'iframe', title: 'Console: ' + containerName, height: height, width: width});
-                            }
+                            var width = Math.min(screen.availWidth, 1200);
+                            window.open(data, 'Console_' + containerName.replace(/[^a-zA-Z0-9]/g, '_'),
+                                'height=' + height + ',width=' + width + ',resizable=yes,scrollbars=yes');
                         }
                     });
                 }
@@ -4106,21 +4320,23 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             divider: true
         });
 
-        // Logs - uses Unraid's openTerminal
+        // Logs — start ttyd via plugin, open in new window (same as stack logs)
         opts.push({
             text: 'Logs',
             icon: 'fa-navicon',
             action: function(e) {
                 e.preventDefault();
-                if (typeof openTerminal === 'function') {
-                    openTerminal('docker', containerName, '.log');
-                } else {
-                    swal({
-                        title: 'Logs',
-                        text: 'Terminal not available',
-                        type: 'info'
-                    });
-                }
+                $.post(compURL, {
+                    action: 'containerLogs',
+                    container: containerName
+                }, function(data) {
+                    if (data) {
+                        var height = Math.min(screen.availHeight, 800);
+                        var width = Math.min(screen.availWidth, 1200);
+                        window.open(data, 'Logs_' + containerName.replace(/[^a-zA-Z0-9]/g, '_'),
+                            'height=' + height + ',width=' + width + ',resizable=yes,scrollbars=yes');
+                    }
+                });
             }
         });
 
@@ -4232,7 +4448,9 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                     } catch (e) {}
                     // Also refresh Unraid's Docker containers widget
                     if (typeof window.loadlist === 'function') {
-                        setTimeout(function() { window.loadlist(); }, 1500);
+                        setTimeout(function() {
+                            window.loadlist();
+                        }, 1500);
                     }
                 } else {
                     // Restore status icon or remove overlay spinner
@@ -4544,25 +4762,24 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
 
     <span class='tipsterallowed' hidden></span>
     <div class="TableContainer">
-    <table id="compose_stacks" class="tablesorter shift" style="table-layout:fixed;width:100%">
-        <thead>
-            <tr>
-                <th class="col-stack">Stack</th>
-                <th class="col-update">Update</th>
-                <th class="col-containers">Containers</th>
-                <th class="col-uptime">Uptime</th>
-                <th class="cm-advanced col-description">Description</th>
-                <th class="cm-advanced col-compose">Compose</th>
-                <th class="cm-advanced col-path">Path</th>
-                <th class="nine col-autostart">Autostart</th>
-            </tr>
-        </thead>
-        <tbody id="compose_list">
-            <tr>
-                <td colspan='8'></td>
-            </tr>
-        </tbody>
-    </table>
+        <table id="compose_stacks" class="tablesorter shift" style="table-layout:fixed;width:100%">
+            <thead>
+                <tr>
+                    <th class="col-stack">Stack</th>
+                    <th class="col-update">Update</th>
+                    <th class="col-containers">Containers</th>
+                    <th class="col-uptime">Uptime</th>
+                    <th class="cm-advanced col-description">Description</th>
+                    <th class="cm-advanced col-path">Path</th>
+                    <th class="nine col-autostart">Autostart</th>
+                </tr>
+            </thead>
+            <tbody id="compose_list">
+                <tr>
+                    <td colspan='7'></td>
+                </tr>
+            </tbody>
+        </table>
     </div>
     <span class='tipsterallowed' hidden>
         <input type='button' value='Add New Stack' onclick='addStack();'>
@@ -4909,8 +5126,13 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
                 function attachDockerObserver() {
                     var dockerTable = document.getElementById('docker_list');
                     if (dockerTable) {
-                        var obs = new MutationObserver(function() { setTimeout(doHide, 300); });
-                        obs.observe(dockerTable, { childList: true, subtree: true });
+                        var obs = new MutationObserver(function() {
+                            setTimeout(doHide, 300);
+                        });
+                        obs.observe(dockerTable, {
+                            childList: true,
+                            subtree: true
+                        });
                         // Initial run now that docker table exists
                         setTimeout(doHide, 500);
                     } else {
