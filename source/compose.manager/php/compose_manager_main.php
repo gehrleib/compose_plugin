@@ -3747,10 +3747,10 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + ipAddresses.map(escapeHtml).join('<br>') + '</span></td>';
 
             // Container Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.slice(0, 3).map(escapeHtml).join('<br>') + (containerPorts.length > 3 ? '<br>...' : '') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + containerPorts.map(escapeHtml).join('<br>') + '</span></td>';
 
             // LAN IP:Port
-            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.slice(0, 3).map(escapeHtml).join('<br>') + (lanPorts.length > 3 ? '<br>...' : '') + '</span></td>';
+            html += '<td style="white-space:nowrap;"><span class="docker_readmore">' + lanPorts.map(escapeHtml).join('<br>') + '</span></td>';
 
             html += '</tr>';
         });
