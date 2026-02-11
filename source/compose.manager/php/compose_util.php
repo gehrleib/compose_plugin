@@ -75,12 +75,13 @@ switch ($_POST['action']) {
             $safeName = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $containerName);
             $socketName = "compose_ct_" . $safeName;
 
-            // Kill any existing ttyd on this socket
-            $pid = exec("pgrep -a ttyd | awk '/" . preg_quote($socketName, '/') . "\\.sock/{print \$1}'");
-            if ($pid) exec("kill " . intval($pid));
+            // Kill any existing ttyd on this socket (pkill -f is more robust
+            // than pgrep|awk — ensures stale read-only instances are gone)
+            exec("pkill -f " . escapeshellarg($socketName . ".sock") . " 2>/dev/null");
+            usleep(300000); // 300ms for process to exit
             @unlink("/var/tmp/$socketName.sock");
 
-            // Start ttyd with docker exec (writable terminal)
+            // Start ttyd with docker exec (writable terminal — no -R flag)
             $cmd = "ttyd -o -i " . escapeshellarg("/var/tmp/$socketName.sock")
                  . " docker exec -it " . escapeshellarg($containerName)
                  . " " . escapeshellarg($shell) . " > /dev/null 2>&1 &";
@@ -92,9 +93,9 @@ switch ($_POST['action']) {
                 usleep(100000);
             }
 
-            // Return direct ttyd URL via /webterminal/ (writable WebSocket proxy).
-            // /logterminal/ enforces read-only WebSocket at the nginx level.
-            echo "/webterminal/$socketName/";
+            // /logterminal/ proxies to /var/tmp/<name>.sock with full
+            // bidirectional WebSocket — writable because we omit -R.
+            echo "/logterminal/$socketName/";
         }
         break;
     case 'containerLogs':
@@ -105,11 +106,11 @@ switch ($_POST['action']) {
             $socketName = "compose_log_" . $safeName;
 
             // Kill any existing ttyd on this socket
-            $pid = exec("pgrep -a ttyd | awk '/" . preg_quote($socketName, '/') . "\\.sock/{print \$1}'");
-            if ($pid) exec("kill " . intval($pid));
+            exec("pkill -f " . escapeshellarg($socketName . ".sock") . " 2>/dev/null");
+            usleep(300000);
             @unlink("/var/tmp/$socketName.sock");
 
-            // Start ttyd with docker logs -f
+            // Start ttyd with docker logs -f (read-only)
             $cmd = "ttyd -R -o -i " . escapeshellarg("/var/tmp/$socketName.sock")
                  . " docker logs -f " . escapeshellarg($containerName) . " > /dev/null 2>&1 &";
             exec($cmd);

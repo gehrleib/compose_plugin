@@ -17,7 +17,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
 }
 ?>
 <!DOCTYPE html>
-<html style="height:100%;margin:0;padding:0">
+<html style="height:100%;margin:0;padding:0;background:#2b2b2b">
 
 <head>
     <style>
@@ -27,7 +27,8 @@ if (version_compare($version['version'], "6.10.0", "<")) {
             padding: 0;
             height: 100%;
             overflow: hidden;
-            background: rgb(43, 43, 43)
+            background: #2b2b2b;
+            box-sizing: border-box
         }
 
         body {
@@ -44,9 +45,9 @@ if (version_compare($version['version'], "6.10.0", "<")) {
 
         p.centered {
             text-align: center;
-            padding: 12px 0 20px;
+            padding: 10px 0;
             margin: 0;
-            background: rgb(43, 43, 43);
+            background: #2b2b2b;
             flex-shrink: 0
         }
 
@@ -91,7 +92,7 @@ if (version_compare($version['version'], "6.10.0", "<")) {
     </style>
 </head>
 
-<body>
+<body style="background:#2b2b2b">
     <iframe id="ttyd-frame" src="<?= $url ?>"></iframe>
     <?php if ($showDone): ?>
         <p class="centered"><button class="logLine" type="button" id="done-btn">Done</button></p>
