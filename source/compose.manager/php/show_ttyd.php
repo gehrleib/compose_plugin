@@ -136,6 +136,18 @@ if (version_compare($version['version'], "6.10.0", "<")) {
         // Apply to parent window
         suppressBeforeUnload(window);
 
+        // Darken ALL Shadowbox container elements so no white peeks through.
+        // Uses CSS injection with !important to override Shadowbox's own styles.
+        try {
+            var doc = top.document;
+            if (!doc.getElementById('compose-sb-dark')) {
+                var s = doc.createElement('style');
+                s.id = 'compose-sb-dark';
+                s.textContent = '#sb-body,#sb-body-inner,#sb-player,#sb-info,#sb-info-inner,#sb-loading,#sb-wrapper-inner{background:#2b2b2b !important;border-color:#2b2b2b !important}';
+                doc.head.appendChild(s);
+            }
+        } catch (e) {}
+
         // Apply inside iframe once loaded (same-origin)
         var frame = document.getElementById('ttyd-frame');
         frame.addEventListener('load', function() {

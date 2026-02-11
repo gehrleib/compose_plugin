@@ -381,7 +381,7 @@ $script = <<<'EOT'
 
     function openDockerTerminal(name, isLogs, shell) {
         if (isLogs) {
-            // Logs — start ttyd via plugin, open in new window
+            // Logs — start ttyd via plugin, open in new window (same as stack logs)
             $.post('/plugins/compose.manager/php/compose_util.php', {
                 action: 'containerLogs',
                 container: name
@@ -394,7 +394,7 @@ $script = <<<'EOT'
                 }
             });
         } else {
-            // Console — start ttyd via plugin, open in new window
+            // Console — start writable ttyd via plugin, open directly
             $.post('/plugins/compose.manager/php/compose_util.php', {
                 action: 'containerConsole',
                 container: name,

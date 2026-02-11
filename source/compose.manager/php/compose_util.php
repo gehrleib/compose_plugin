@@ -81,10 +81,12 @@ switch ($_POST['action']) {
             usleep(300000); // 300ms for process to exit
             @unlink("/var/tmp/$socketName.sock");
 
-            // Start ttyd with docker exec (writable terminal — no -R flag)
-            $cmd = "ttyd -o -i " . escapeshellarg("/var/tmp/$socketName.sock")
+            // Start ttyd via ttyd-exec wrapper (same as Unraid native docker console).
+            // ttyd-exec sources /etc/default/ttyd for TTYD_OPTS and adds -d0.
+            // No -R flag = writable interactive terminal.
+            $cmd = "ttyd-exec -s9 -om1 -i " . escapeshellarg("/var/tmp/$socketName.sock")
                  . " docker exec -it " . escapeshellarg($containerName)
-                 . " " . escapeshellarg($shell) . " > /dev/null 2>&1 &";
+                 . " " . escapeshellarg($shell);
             exec($cmd);
 
             // Wait for ttyd to create the socket (up to 2s) to avoid 502

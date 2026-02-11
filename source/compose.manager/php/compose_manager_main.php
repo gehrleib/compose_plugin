@@ -4032,7 +4032,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             });
         }
 
-        // Console (if running) — start ttyd, open in new window
+        // Console (if running) — start writable ttyd, open in new window
         if (running) {
             opts.push({
                 text: 'Console',
@@ -4104,7 +4104,7 @@ $hideComposeFromDocker = ($cfg['HIDE_COMPOSE_FROM_DOCKER'] ?? 'false') === 'true
             divider: true
         });
 
-        // Logs - start ttyd via plugin, open in new window
+        // Logs — start ttyd via plugin, open in new window (same as stack logs)
         opts.push({
             text: 'Logs',
             icon: 'fa-navicon',
