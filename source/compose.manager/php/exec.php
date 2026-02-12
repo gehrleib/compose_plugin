@@ -30,6 +30,12 @@ switch ($_POST['action']) {
         #Create indirect
         $indirect = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : "";
         if (!empty($indirect)) {
+            // Validate stackPath is under an allowed root (/mnt/ or /boot/config/)
+            $realIndirect = realpath(dirname($indirect)) ?: $indirect;
+            if (strpos($realIndirect, '/mnt/') !== 0 && strpos($realIndirect, '/boot/config/') !== 0) {
+                echo json_encode(['result' => 'error', 'message' => 'Stack path must be under /mnt/ or /boot/config/.']);
+                break;
+            }
             if (!is_dir($indirect)) {
                 exec("mkdir -p " . escapeshellarg($indirect));
                 if (!is_dir($indirect)) {
@@ -96,7 +102,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => '', 'project' => $projectDir, 'projectName' => $stackName]);
         break;
     case 'deleteStack':
-        $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : "";
+        $stackName = isset($_POST['stackName']) ? basename(trim($_POST['stackName'])) : "";
         if (! $stackName) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -284,10 +290,18 @@ switch ($_POST['action']) {
         }
         $fileContent = isset($_POST['envPath']) ? trim($_POST['envPath']) : "";
         $fileName = "$compose_root/$script/envpath";
-        if (is_file($fileName)) {
-            exec("rm " . escapeshellarg($fileName));
+        // Validate env path is under an allowed root
+        if (!empty($fileContent)) {
+            $realEnvDir = realpath(dirname($fileContent));
+            if ($realEnvDir === false || (strpos($realEnvDir, '/mnt/') !== 0 && strpos($realEnvDir, '/boot/config/') !== 0)) {
+                echo json_encode(['result' => 'error', 'message' => 'Env file path must be under /mnt/ or /boot/config/.']);
+                break;
+            }
         }
-        if (isset($fileContent) && !empty($fileContent)) {
+        if (is_file($fileName)) {
+            @unlink($fileName);
+        }
+        if (!empty($fileContent)) {
             file_put_contents($fileName, $fileContent);
         }
         echo json_encode(['result' => 'success', 'message' => '']);
@@ -1222,7 +1236,7 @@ switch ($_POST['action']) {
 
     case 'restoreBackup':
         require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
-        $archive = isset($_POST['archive']) ? trim($_POST['archive']) : '';
+        $archive = isset($_POST['archive']) ? basename(trim($_POST['archive'])) : '';
         $stacks = isset($_POST['stacks']) ? $_POST['stacks'] : '';
         if (is_string($stacks)) {
             $stacks = json_decode($stacks, true);
@@ -1235,7 +1249,7 @@ switch ($_POST['action']) {
             echo json_encode(['result' => 'error', 'message' => 'No stacks selected for restore.']);
             break;
         }
-        exec("logger -t 'compose.manager' " . escapeshellarg("[restore] Restore started from " . basename($archive) . " (" . count($stacks) . " stacks)"));
+        exec("logger -t 'compose.manager' " . escapeshellarg("[restore] Restore started from " . $archive . " (" . count($stacks) . " stacks)"));
         $archivePath = resolveArchivePath($archive);
         $result = restoreStacks($archivePath, $stacks);
         if ($result['result'] === 'error') {
@@ -1284,6 +1298,31 @@ switch ($_POST['action']) {
             break;
         }
 
+        // Whitelist allowed setting keys to prevent arbitrary config injection
+        $allowedKeys = [
+            'BACKUP_DESTINATION', 'BACKUP_RETENTION',
+            'BACKUP_SCHEDULE_ENABLED', 'BACKUP_SCHEDULE_FREQUENCY',
+            'BACKUP_SCHEDULE_TIME', 'BACKUP_SCHEDULE_DAY'
+        ];
+        $settings = array_intersect_key($settings, array_flip($allowedKeys));
+
+        // Validate numeric/enum fields
+        if (isset($settings['BACKUP_RETENTION'])) {
+            $settings['BACKUP_RETENTION'] = max(0, intval($settings['BACKUP_RETENTION']));
+        }
+        if (isset($settings['BACKUP_SCHEDULE_DAY'])) {
+            $settings['BACKUP_SCHEDULE_DAY'] = max(0, min(6, intval($settings['BACKUP_SCHEDULE_DAY'])));
+        }
+        if (isset($settings['BACKUP_SCHEDULE_FREQUENCY']) && !in_array($settings['BACKUP_SCHEDULE_FREQUENCY'], ['daily', 'weekly'], true)) {
+            $settings['BACKUP_SCHEDULE_FREQUENCY'] = 'daily';
+        }
+        if (isset($settings['BACKUP_SCHEDULE_ENABLED']) && !in_array($settings['BACKUP_SCHEDULE_ENABLED'], ['true', 'false'], true)) {
+            $settings['BACKUP_SCHEDULE_ENABLED'] = 'false';
+        }
+        if (isset($settings['BACKUP_SCHEDULE_TIME']) && !preg_match('/^\d{1,2}:\d{2}$/', $settings['BACKUP_SCHEDULE_TIME'])) {
+            $settings['BACKUP_SCHEDULE_TIME'] = '03:00';
+        }
+
         // Write settings to config file
         $cfgFile = '/boot/config/plugins/compose.manager/compose.manager.cfg';
         $existingCfg = is_file($cfgFile) ? parse_ini_file($cfgFile) : [];
@@ -1291,6 +1330,8 @@ switch ($_POST['action']) {
 
         $lines = [];
         foreach ($updatedCfg as $key => $value) {
+            // Sanitize value: strip newlines and quotes to prevent INI injection
+            $value = str_replace(['"', "\n", "\r"], '', $value);
             $lines[] = "$key=\"$value\"";
         }
         file_put_contents($cfgFile, implode("\n", $lines) . "\n");

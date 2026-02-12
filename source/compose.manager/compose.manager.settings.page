@@ -1012,6 +1012,10 @@ function uploadBackupArchive(input) {
   var formData = new FormData();
   formData.append('action', 'uploadBackup');
   formData.append('file', file);
+  // Explicitly include CSRF token since ajaxSetup.data is not merged for FormData
+  if (typeof csrf_token !== 'undefined') {
+    formData.append('csrf_token', csrf_token);
+  }
   
   showBackupStatus('#restore-status', 'Uploading ' + file.name + '...', 'info');
   
