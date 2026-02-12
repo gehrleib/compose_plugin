@@ -1578,7 +1578,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     function deleteStack(myID) {
         var stackName = $("#" + myID).attr("data-scriptname");
         var project = $("#" + myID).attr("data-namename");
-        var msgHtml = "Are you sure you want to delete <font color='red'><b>" + project + "</b></font> (<font color='green'>" + compose_root + "/" + stackName + "</font>)?";
+        var msgHtml = "Are you sure you want to delete <font color='red'><b>" + escapeHtml(project) + "</b></font> (<font color='green'>" + escapeHtml(compose_root) + "/" + escapeHtml(stackName) + "</font>)?";
         swal({
             title: "Delete Stack?",
             text: msgHtml,
@@ -1678,9 +1678,9 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
     function applyDesc(myID) {
         var newDesc = $("#newDesc" + myID).val();
-        var escapedDesc = escapeHtml(newDesc).replace(/\n/g, "<br>");
         var project = $("#" + myID).attr("data-scriptname");
-        $("#" + myID).html(escapedDesc);
+        // Use .text() with CSS white-space to avoid .html() XSS risk
+        $("#" + myID).text(newDesc).css('white-space', 'pre-line');
         $.post(caURL, {
             action: 'changeDesc',
             script: project,
@@ -1764,7 +1764,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                 $('#editorFileName').data("stackname", project);
                 $('#editorFileName').data("stackfilename", "docker-compose.yml")
-                $('#editorFileName').html(response.fileName)
+                $('#editorFileName').text(response.fileName)
                 $(".editing").show();
                 window.scrollTo(0, 0);
             }
@@ -1787,7 +1787,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
 
                 $('#editorFileName').data("stackname", project);
                 $('#editorFileName').data("stackfilename", ".env")
-                $('#editorFileName').html(response.fileName)
+                $('#editorFileName').text(response.fileName)
                 $(".editing").show();
                 window.scrollTo(0, 0);
             }
@@ -3591,7 +3591,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var filename = response.fileName;
                 $(".tipsterallowed").hide();
                 $(".editing").show();
-                $("#editorFileName").html(filename);
+                $("#editorFileName").text(filename);
                 $("#editorFileName").attr("data-stackname", project);
                 $("#editorFileName").attr("data-stackfilename", "docker-compose.yml");
                 var editor = ace.edit("itemEditor");
@@ -3611,7 +3611,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var filename = response.fileName;
                 $(".tipsterallowed").hide();
                 $(".editing").show();
-                $("#editorFileName").html(filename);
+                $("#editorFileName").text(filename);
                 $("#editorFileName").attr("data-stackname", project);
                 $("#editorFileName").attr("data-stackfilename", ".env");
                 var editor = ace.edit("itemEditor");
@@ -3631,7 +3631,7 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
                 var filename = response.fileName;
                 $(".tipsterallowed").hide();
                 $(".editing").show();
-                $("#editorFileName").html(filename);
+                $("#editorFileName").text(filename);
                 $("#editorFileName").attr("data-stackname", project);
                 $("#editorFileName").attr("data-stackfilename", "docker-compose.override.yml");
                 var editor = ace.edit("itemEditor");
