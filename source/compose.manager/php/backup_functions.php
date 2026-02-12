@@ -299,9 +299,9 @@ function updateBackupCron()
 
     if (!$enabled) {
         // Write back crontab without our line
-        $tmpFile = '/tmp/compose-manager-crontab.' . getmypid();
+        $tmpFile = tempnam('/tmp', 'compose-cron-');
         file_put_contents($tmpFile, $existing);
-        exec("crontab {$tmpFile}");
+        exec("crontab " . escapeshellarg($tmpFile));
         @unlink($tmpFile);
         return;
     }
@@ -323,9 +323,9 @@ function updateBackupCron()
     }
 
     // Write updated crontab
-    $tmpFile = '/tmp/compose-manager-crontab.' . getmypid();
+    $tmpFile = tempnam('/tmp', 'compose-cron-');
     file_put_contents($tmpFile, $existing . $cronLine . "\n");
-    exec("crontab {$tmpFile}");
+    exec("crontab " . escapeshellarg($tmpFile));
     @unlink($tmpFile);
 }
 
