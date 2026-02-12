@@ -16,12 +16,20 @@ result=$(php -r "
   echo json_encode(\$r);
 ")
 
-# Parse result
-status=$(echo "$result" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['result'] ?? 'error';")
-message=$(echo "$result" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['message'] ?? 'Unknown error';")
-archive=$(echo "$result" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['archive'] ?? '';")
-size=$(echo "$result" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['size'] ?? '';")
-stacks=$(echo "$result" | php -r "echo json_decode(file_get_contents('php://stdin'), true)['stacks'] ?? 0;")
+# Parse all result fields in a single php invocation instead of 5 separate calls
+eval $(echo "$result" | php -r '
+  $j = json_decode(file_get_contents("php://stdin"), true) ?: [];
+  $fields = [
+    "status"  => $j["result"]  ?? "error",
+    "message" => $j["message"] ?? "Unknown error",
+    "archive" => $j["archive"] ?? "",
+    "size"    => $j["size"]    ?? "",
+    "stacks"  => $j["stacks"]  ?? "0",
+  ];
+  foreach ($fields as $k => $v) {
+    printf("%s=%s\n", $k, escapeshellarg($v));
+  }
+')
 
 if [ "$status" = "success" ]; then
     logger -t "$LOG_TAG" "[backup] Scheduled backup completed: $archive ($size, $stacks stacks)"

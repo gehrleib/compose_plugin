@@ -219,7 +219,7 @@ switch ($_POST['action']) {
         $autostart = isset($_POST['autostart']) ? trim($_POST['autostart']) : "false";
         $fileName = "$compose_root/$script/autostart";
         if (is_file($fileName)) {
-            exec("rm " . escapeshellarg($fileName));
+            @unlink($fileName);
         }
         file_put_contents($fileName, $autostart);
         echo json_encode(['result' => 'success', 'message' => '']);
@@ -424,10 +424,8 @@ switch ($_POST['action']) {
 
         if ($scriptContents == "[]") {
             if (is_file($fileName)) {
-                exec("rm " . escapeshellarg($fileName));
-                echo json_encode(['result' => 'success', 'message' => "$fileName deleted"]);
+                @unlink($fileName);
             }
-
             echo json_encode(['result' => 'success', 'message' => '']);
             break;
         }
@@ -889,6 +887,40 @@ switch ($_POST['action']) {
 
             if ($output) {
                 $lines = explode("\n", trim($output));
+
+                // Load once, batch-clear local SHAs, save once (avoid per-container I/O)
+                $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
+                $statusDirty = false;
+
+                // First pass: collect running images and clear cached local SHAs
+                $runningImages = [];
+                foreach ($lines as $line) {
+                    if (!empty($line)) {
+                        $container = json_decode($line, true);
+                        if ($container) {
+                            $state = $container['State'] ?? '';
+                            if ($state === 'running') {
+                                $isRunning = true;
+                                $image = $container['Image'] ?? '';
+                                if ($image) {
+                                    $image = normalizeImageForUpdateCheck($image);
+                                    $runningImages[] = $image;
+                                    if (isset($updateStatusData[$image])) {
+                                        $updateStatusData[$image]['local'] = null;
+                                        $statusDirty = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Save once after clearing all cached SHAs
+                if ($statusDirty) {
+                    DockerUtil::saveJSON($dockerManPaths['update-status'], $updateStatusData);
+                }
+
+                // Second pass: check updates for running containers
                 foreach ($lines as $line) {
                     if (!empty($line)) {
                         $container = json_decode($line, true);
@@ -897,30 +929,14 @@ switch ($_POST['action']) {
                             $image = $container['Image'] ?? '';
                             $state = $container['State'] ?? '';
 
-                            // Check if any container is running
-                            if ($state === 'running') {
-                                $isRunning = true;
-                            }
-
                             // Only check updates for running containers
                             if ($containerName && $image && $state === 'running') {
-                                // Normalize image name (strip docker.io/ prefix, @sha256: digest, add library/ for official images)
                                 $image = normalizeImageForUpdateCheck($image);
-
-                                // Clear cached local SHA to force re-inspection of the actual image
-                                // This is needed because Unraid's reloadUpdateStatus uses cached values
-                                // which can be stale after docker compose pull
-                                $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
-                                if (isset($updateStatusData[$image])) {
-                                    // Clear the local SHA to force fresh inspection
-                                    $updateStatusData[$image]['local'] = null;
-                                    DockerUtil::saveJSON($dockerManPaths['update-status'], $updateStatusData);
-                                }
 
                                 $DockerUpdate->reloadUpdateStatus($image);
                                 $updateStatus = $DockerUpdate->getUpdateStatus($image);
 
-                                // Get SHA values from the status file
+                                // Re-read status data (may have been updated by reloadUpdateStatus)
                                 $updateStatusData = DockerUtil::loadJSON($dockerManPaths['update-status']);
                                 $localSha = '';
                                 $remoteSha = '';
