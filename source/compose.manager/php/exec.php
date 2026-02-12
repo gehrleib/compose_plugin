@@ -283,8 +283,14 @@ switch ($_POST['action']) {
         // Validate env path is under an allowed root
         if (!empty($fileContent)) {
             $realEnvDir = realpath(dirname($fileContent));
-            if ($realEnvDir === false || (strpos($realEnvDir, '/mnt/') !== 0 && strpos($realEnvDir, '/boot/config/') !== 0)) {
-                echo json_encode(['result' => 'error', 'message' => 'Env file path must be under /mnt/ or /boot/config/.']);
+            $realComposeRoot = realpath($compose_root);
+            $allowed = $realEnvDir !== false && (
+                strpos($realEnvDir, '/mnt/') === 0 ||
+                strpos($realEnvDir, '/boot/config/') === 0 ||
+                ($realComposeRoot !== false && strpos($realEnvDir, $realComposeRoot) === 0)
+            );
+            if (!$allowed) {
+                echo json_encode(['result' => 'error', 'message' => 'Env file path must be under /mnt/, /boot/config/, or the compose root.']);
                 break;
             }
         }

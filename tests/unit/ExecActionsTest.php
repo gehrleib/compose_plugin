@@ -430,24 +430,17 @@ class ExecActionsTest extends TestCase
 
     /**
      * Test setEnvPath creates envpath file
-     * Note: Requires Linux paths for realpath() validation against /mnt/ or /boot/config/
+     * Uses a path under compose_root which is always writable and allowed.
      */
     public function testSetEnvPathCreatesFile(): void
     {
-        if (DIRECTORY_SEPARATOR === '\\') {
-            $this->markTestSkipped('setEnvPath path validation requires Linux paths (/mnt/ or /boot/config/).');
-        }
-
         $stackPath = $this->createTestStack('test-stack');
 
-        // Create the target directory so realpath() resolves it in CI.
-        // Skip if /mnt/ isn't writable (runner permissions vary).
-        $envDir = '/mnt/user/appdata';
-        if (!is_dir($envDir) && !@mkdir($envDir, 0755, true)) {
-            $this->markTestSkipped('Cannot create /mnt/user/appdata/ (insufficient permissions).');
-        }
-        
+        // Use a path under compose_root — always writable and passes validation
+        $envDir = $this->testComposeRoot . '/envfiles';
+        mkdir($envDir, 0755, true);
         $customPath = $envDir . '/custom.env';
+
         $output = $this->executeAction('setEnvPath', [
             'script' => 'test-stack',
             'envPath' => $customPath,
