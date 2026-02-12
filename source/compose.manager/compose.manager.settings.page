@@ -322,6 +322,13 @@ var skipPatchUI = <?php echo json_encode($option_patch_ui); ?>; // true when Unr
 var logRefreshInterval = null;
 var autoScroll = true;
 
+// CSRF token — included automatically in all $.ajax/$.post requests
+var csrf_token = <?php
+    $_var = @parse_ini_file('/var/local/emhttp/var.ini');
+    echo json_encode($_var['csrf_token'] ?? '');
+?>;
+$.ajaxSetup({data: {csrf_token: csrf_token}});
+
 function toggleHelp(dt) {
   var dl = dt.closest('dl');
   var blockquote = dl.querySelector('blockquote.inline_help');

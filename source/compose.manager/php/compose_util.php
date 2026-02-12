@@ -8,6 +8,15 @@
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/compose_util_functions.php");
 
+// CSRF token validation — Unraid stores a token in var.ini that must
+// accompany every state-changing POST request.
+$_var = @parse_ini_file('/var/local/emhttp/var.ini');
+if ($_var && isset($_var['csrf_token'])) {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_var['csrf_token']) {
+        die(json_encode(['result' => 'error', 'message' => 'Invalid or missing CSRF token']));
+    }
+}
+
 switch ($_POST['action']) {
     case 'composeUp':
         echoComposeCommand('up');

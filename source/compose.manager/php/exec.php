@@ -4,10 +4,31 @@ require_once("/usr/local/emhttp/plugins/compose.manager/php/defines.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/util.php");
 require_once("/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php");
 
+// CSRF token validation — Unraid stores a token in var.ini that must
+// accompany every state-changing POST request.
+$_var = @parse_ini_file('/var/local/emhttp/var.ini');
+if ($_var && isset($_var['csrf_token'])) {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_var['csrf_token']) {
+        die(json_encode(['result' => 'error', 'message' => 'Invalid or missing CSRF token']));
+    }
+}
+
+/**
+ * Safely retrieve the 'script' POST parameter (stack directory name).
+ * Applies basename() to prevent path traversal attacks.
+ * Does NOT apply urldecode() because PHP already decodes POST data.
+ *
+ * @return string The sanitized script/stack directory name
+ */
+function getPostScript(): string {
+    $script = $_POST['script'] ?? '';
+    return basename(trim($script));
+}
+
 switch ($_POST['action']) {
     case 'addStack':
         #Create indirect
-        $indirect = isset($_POST['stackPath']) ? urldecode(($_POST['stackPath'])) : "";
+        $indirect = isset($_POST['stackPath']) ? trim($_POST['stackPath']) : "";
         if (!empty($indirect)) {
             if (!is_dir($indirect)) {
                 exec("mkdir -p " . escapeshellarg($indirect));
@@ -21,7 +42,7 @@ switch ($_POST['action']) {
         #Pull stack files
 
         #Create stack folder
-        $stackName = isset($_POST['stackName']) ? urldecode(($_POST['stackName'])) : "";
+        $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : "";
         $folderName = str_replace('"', "", $stackName);
         $folderName = str_replace("'", "", $folderName);
         $folderName = str_replace("&", "", $folderName);
@@ -65,7 +86,7 @@ switch ($_POST['action']) {
         file_put_contents("$folder/name", $stackName);
 
         // Save description if provided
-        $stackDesc = isset($_POST['stackDesc']) ? urldecode(($_POST['stackDesc'])) : "";
+        $stackDesc = isset($_POST['stackDesc']) ? trim($_POST['stackDesc']) : "";
         if (!empty($stackDesc)) {
             file_put_contents("$folder/description", trim($stackDesc));
         }
@@ -75,7 +96,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => '', 'project' => $projectDir, 'projectName' => $stackName]);
         break;
     case 'deleteStack':
-        $stackName = isset($_POST['stackName']) ? urldecode(($_POST['stackName'])) : "";
+        $stackName = isset($_POST['stackName']) ? trim($_POST['stackName']) : "";
         if (! $stackName) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -90,19 +111,19 @@ switch ($_POST['action']) {
         }
         break;
     case 'changeName':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
-        $newName = isset($_POST['newName']) ? urldecode(($_POST['newName'])) : "";
+        $script = getPostScript();
+        $newName = isset($_POST['newName']) ? trim($_POST['newName']) : "";
         file_put_contents("$compose_root/$script/name", trim($newName));
         echo json_encode(['result' => 'success', 'message' => '']);
         break;
     case 'changeDesc':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
-        $newDesc = isset($_POST['newDesc']) ? urldecode(($_POST['newDesc'])) : "";
+        $script = getPostScript();
+        $newDesc = isset($_POST['newDesc']) ? trim($_POST['newDesc']) : "";
         file_put_contents("$compose_root/$script/description", trim($newDesc));
         echo json_encode(['result' => 'success', 'message' => '']);
         break;
     case 'getDescription':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -113,7 +134,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'content' => $fileContents]);
         break;
     case 'getYml':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         $basePath = getPath("$compose_root/$script");
         $fileName = "docker-compose.yml";
 
@@ -125,7 +146,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'fileName' => "$basePath/$fileName", 'content' => $scriptContents]);
         break;
     case 'getEnv':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         $basePath = getPath("$compose_root/$script");
         $fileName = "$basePath/.env";
         if (is_file("$basePath/envpath")) {
@@ -141,7 +162,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'fileName' => "$fileName", 'content' => $scriptContents]);
         break;
     case 'getOverride':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         $basePath = "$compose_root/$script";
         $fileName = "docker-compose.override.yml";
 
@@ -153,7 +174,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'fileName' => "$basePath/$fileName", 'content' => $scriptContents]);
         break;
     case 'saveYml':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
         $basePath = getPath("$compose_root/$script");
         $fileName = "docker-compose.yml";
@@ -162,7 +183,7 @@ switch ($_POST['action']) {
         echo "$basePath/$fileName saved";
         break;
     case 'saveEnv':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
         $basePath = getPath("$compose_root/$script");
         $fileName = "$basePath/.env";
@@ -175,7 +196,7 @@ switch ($_POST['action']) {
         echo "$fileName saved";
         break;
     case 'saveOverride':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
         $basePath = "$compose_root/$script";
         $fileName = "docker-compose.override.yml";
@@ -184,12 +205,12 @@ switch ($_POST['action']) {
         echo "$basePath/$fileName saved";
         break;
     case 'updateAutostart':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
         }
-        $autostart = isset($_POST['autostart']) ? urldecode(($_POST['autostart'])) : "false";
+        $autostart = isset($_POST['autostart']) ? trim($_POST['autostart']) : "false";
         $fileName = "$compose_root/$script/autostart";
         if (is_file($fileName)) {
             exec("rm " . escapeshellarg($fileName));
@@ -256,12 +277,12 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => 'Update cache cleared']);
         break;
     case 'setEnvPath':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
         }
-        $fileContent = isset($_POST['envPath']) ? urldecode(($_POST['envPath'])) : "";
+        $fileContent = isset($_POST['envPath']) ? trim($_POST['envPath']) : "";
         $fileName = "$compose_root/$script/envpath";
         if (is_file($fileName)) {
             exec("rm " . escapeshellarg($fileName));
@@ -272,7 +293,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => '']);
         break;
     case 'getEnvPath':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -286,7 +307,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'fileName' => "$fileName", 'content' => $fileContents]);
         break;
     case 'getStackSettings':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -327,7 +348,7 @@ switch ($_POST['action']) {
         ]);
         break;
     case 'setStackSettings':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -382,7 +403,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => 'Settings saved']);
         break;
     case 'saveProfiles':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         $scriptContents = isset($_POST['scriptContents']) ? $_POST['scriptContents'] : "";
         $basePath = "$compose_root/$script";
         $fileName = "$basePath/profiles";
@@ -401,7 +422,7 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'message' => "$fileName saved"]);
         break;
     case 'getStackContainers':
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -627,8 +648,8 @@ switch ($_POST['action']) {
         echo json_encode(['result' => 'success', 'containers' => $containers, 'projectName' => $projectName]);
         break;
     case 'containerAction':
-        $containerName = isset($_POST['container']) ? urldecode(($_POST['container'])) : "";
-        $containerAction = isset($_POST['containerAction']) ? urldecode(($_POST['containerAction'])) : "";
+        $containerName = isset($_POST['container']) ? trim($_POST['container']) : "";
+        $containerAction = isset($_POST['containerAction']) ? trim($_POST['containerAction']) : "";
 
         if (! $containerName || ! $containerAction) {
             echo json_encode(['result' => 'error', 'message' => 'Container or action not specified.']);
@@ -648,7 +669,7 @@ switch ($_POST['action']) {
         break;
     case 'checkStackUpdates':
         // Check for updates for all containers in a compose stack
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -999,7 +1020,7 @@ switch ($_POST['action']) {
 
     case 'checkStackLock':
         // Check if a stack is currently locked (operation in progress)
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -1022,7 +1043,7 @@ switch ($_POST['action']) {
 
     case 'getStackResult':
         // Get the last operation result for a stack
-        $script = isset($_POST['script']) ? urldecode(($_POST['script'])) : "";
+        $script = getPostScript();
         if (! $script) {
             echo json_encode(['result' => 'error', 'message' => 'Stack not specified.']);
             break;
@@ -1114,7 +1135,7 @@ switch ($_POST['action']) {
 
     case 'listBackups':
         require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
-        $directory = isset($_POST['directory']) && $_POST['directory'] !== '' ? urldecode($_POST['directory']) : null;
+        $directory = isset($_POST['directory']) && $_POST['directory'] !== '' ? trim($_POST['directory']) : null;
         $archives = listBackupArchives($directory);
         echo json_encode(['result' => 'success', 'archives' => $archives]);
         break;
@@ -1168,8 +1189,8 @@ switch ($_POST['action']) {
 
     case 'readManifest':
         require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
-        $archive = isset($_POST['archive']) ? urldecode($_POST['archive']) : '';
-        $directory = isset($_POST['directory']) && $_POST['directory'] !== '' ? urldecode($_POST['directory']) : null;
+        $archive = isset($_POST['archive']) ? trim($_POST['archive']) : '';
+        $directory = isset($_POST['directory']) && $_POST['directory'] !== '' ? trim($_POST['directory']) : null;
         if (empty($archive)) {
             echo json_encode(['result' => 'error', 'message' => 'No archive specified.']);
             break;
@@ -1181,7 +1202,7 @@ switch ($_POST['action']) {
 
     case 'restoreBackup':
         require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
-        $archive = isset($_POST['archive']) ? urldecode($_POST['archive']) : '';
+        $archive = isset($_POST['archive']) ? trim($_POST['archive']) : '';
         $stacks = isset($_POST['stacks']) ? $_POST['stacks'] : '';
         if (is_string($stacks)) {
             $stacks = json_decode($stacks, true);
@@ -1211,7 +1232,7 @@ switch ($_POST['action']) {
 
     case 'deleteBackup':
         require_once("/usr/local/emhttp/plugins/compose.manager/php/backup_functions.php");
-        $archive = isset($_POST['archive']) ? urldecode($_POST['archive']) : '';
+        $archive = isset($_POST['archive']) ? trim($_POST['archive']) : '';
         if (empty($archive)) {
             echo json_encode(['result' => 'error', 'message' => 'No archive specified.']);
             break;

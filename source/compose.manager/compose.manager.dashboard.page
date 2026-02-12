@@ -70,12 +70,15 @@ EOT;
 // Debug setting from config
 $debugEnabled = isset($cfg['DEBUG_TO_LOG']) && $cfg['DEBUG_TO_LOG'] === 'true' ? 'true' : 'false';
 $hideComposeContainersJs = $hideDockerComposeContainers ? 'true' : 'false';
+$_var = @parse_ini_file('/var/local/emhttp/var.ini');
+$csrfTokenJs = json_encode($_var['csrf_token'] ?? '');
 
 // CSS and JavaScript
 $configScript = <<<EOT
 <script>
 window.composeDashDebug = $debugEnabled;
 window.hideDockerComposeContainers = $hideComposeContainersJs;
+window.csrf_token = $csrfTokenJs;
 </script>
 EOT;
 
@@ -158,6 +161,11 @@ $script = <<<'EOT'
     var caURL = '/plugins/compose.manager/php/exec.php';
     var expandedStacks = {};
     var stackContainerCache = {};
+
+    // CSRF token — retrieve from Unraid's global if available, otherwise empty
+    // The token is typically available via the parent page's context
+    var csrf_token = (typeof window.csrf_token !== 'undefined') ? window.csrf_token : '';
+    $.ajaxSetup({data: {csrf_token: csrf_token}});
 
     // Debug logging function - respects plugin debug setting
     function debugLog() {

@@ -150,6 +150,13 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     const webui_label = <?php echo json_encode($docker_label_webui); ?>;
     const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 
+    // CSRF token — included automatically in all $.ajax/$.post requests
+    var csrf_token = <?php
+        $_var = @parse_ini_file('/var/local/emhttp/var.ini');
+        echo json_encode($_var['csrf_token'] ?? '');
+    ?>;
+    $.ajaxSetup({data: {csrf_token: csrf_token}});
+
     // Auto-check settings from config
     var autoCheckUpdates = <?php echo json_encode($autoCheckUpdates); ?>;
     var autoCheckDays = <?php echo json_encode($autoCheckDays); ?>;
