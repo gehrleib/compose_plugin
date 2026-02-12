@@ -1,25 +1,13 @@
 <?php
+
 /**
  * Compose Util - AJAX Action Handler for Compose Manager
- * 
+ *
  * Handles compose actions like up, down, pull, etc.
  * Functions are defined in compose_util_functions.php for testability.
  */
 
 require_once("/usr/local/emhttp/plugins/compose.manager/php/compose_util_functions.php");
-
-// CSRF token validation — Unraid stores a token in var.ini that must
-// accompany every state-changing POST request.
-// Read-only actions are exempted so that log-fetching works without a token.
-$_compose_read_only_actions = ['composeLogs', 'clientDebug', 'containerLogs'];
-if (!in_array($_POST['action'] ?? '', $_compose_read_only_actions)) {
-    $_var = @parse_ini_file('/var/local/emhttp/var.ini');
-    if ($_var && isset($_var['csrf_token'])) {
-        if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_var['csrf_token']) {
-            die(json_encode(['result' => 'error', 'message' => 'Invalid or missing CSRF token']));
-        }
-    }
-}
 
 switch ($_POST['action']) {
     case 'composeUp':
@@ -67,7 +55,7 @@ switch ($_POST['action']) {
         $data = isset($_POST['data']) ? $_POST['data'] : '';
         if ($msg) {
             // Use logger() from compose_util_functions.php
-            logger("CLIENT_JS: " . $msg . ( $data ? " DATA: " . $data : "" ));
+            logger("CLIENT_JS: " . $msg . ($data ? " DATA: " . $data : ""));
             echo json_encode(array('status' => 'ok'));
         } else {
             echo json_encode(array('status' => 'missing_msg'));
@@ -98,8 +86,8 @@ switch ($_POST['action']) {
             // ttyd-exec sources /etc/default/ttyd for TTYD_OPTS and adds -d0.
             // No -R flag = writable interactive terminal.
             $cmd = "ttyd-exec -s9 -om1 -i " . escapeshellarg("/var/tmp/$socketName.sock")
-                 . " docker exec -it " . escapeshellarg($containerName)
-                 . " " . escapeshellarg($shell);
+                . " docker exec -it " . escapeshellarg($containerName)
+                . " " . escapeshellarg($shell);
             exec($cmd);
 
             // Wait for ttyd to create the socket (up to 2s) to avoid 502
@@ -127,7 +115,7 @@ switch ($_POST['action']) {
 
             // Start ttyd with docker logs -f (read-only)
             $cmd = "ttyd -R -o -i " . escapeshellarg("/var/tmp/$socketName.sock")
-                 . " docker logs -f " . escapeshellarg($containerName) . " > /dev/null 2>&1 &";
+                . " docker logs -f " . escapeshellarg($containerName) . " > /dev/null 2>&1 &";
             exec($cmd);
 
             // Wait for ttyd to create the socket (up to 2s) to avoid 502
@@ -140,4 +128,3 @@ switch ($_POST['action']) {
         }
         break;
 }
-?>

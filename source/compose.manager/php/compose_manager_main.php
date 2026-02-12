@@ -150,26 +150,6 @@ $composeVersion = trim(shell_exec('docker compose version --short 2>/dev/null') 
     const webui_label = <?php echo json_encode($docker_label_webui); ?>;
     const shell_label = <?php echo json_encode($docker_label_shell); ?>;
 
-    // CSRF token — included automatically in all $.ajax/$.post requests
-    var csrf_token = <?php
-        $_var = @parse_ini_file('/var/local/emhttp/var.ini');
-        echo json_encode($_var['csrf_token'] ?? '');
-    ?>;
-    // Ensure every POST includes the CSRF token — $.ajaxPrefilter is more
-    // reliable than $.ajaxSetup({data:…}) across jQuery versions.
-    $.ajaxPrefilter(function(opts) {
-        if (!csrf_token || !opts.type || opts.type.toUpperCase() !== 'POST') return;
-        if (window.FormData && opts.data instanceof FormData) {
-            if (!opts.data.has('csrf_token')) opts.data.append('csrf_token', csrf_token);
-            return;
-        }
-        if (typeof opts.data === 'string') {
-            opts.data += (opts.data.length ? '&' : '') + 'csrf_token=' + encodeURIComponent(csrf_token);
-        } else {
-            opts.data = $.extend(opts.data || {}, {csrf_token: csrf_token});
-        }
-    });
-
     // Auto-check settings from config
     var autoCheckUpdates = <?php echo json_encode($autoCheckUpdates); ?>;
     var autoCheckDays = <?php echo json_encode($autoCheckDays); ?>;
