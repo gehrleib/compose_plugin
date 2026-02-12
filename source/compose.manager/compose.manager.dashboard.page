@@ -165,7 +165,20 @@ $script = <<<'EOT'
     // CSRF token — retrieve from Unraid's global if available, otherwise empty
     // The token is typically available via the parent page's context
     var csrf_token = (typeof window.csrf_token !== 'undefined') ? window.csrf_token : '';
-    $.ajaxSetup({data: {csrf_token: csrf_token}});
+    // Ensure every POST includes the CSRF token — $.ajaxPrefilter is more
+    // reliable than $.ajaxSetup({data:…}) across jQuery versions.
+    $.ajaxPrefilter(function(opts) {
+        if (!csrf_token || !opts.type || opts.type.toUpperCase() !== 'POST') return;
+        if (window.FormData && opts.data instanceof FormData) {
+            if (!opts.data.has('csrf_token')) opts.data.append('csrf_token', csrf_token);
+            return;
+        }
+        if (typeof opts.data === 'string') {
+            opts.data += (opts.data.length ? '&' : '') + 'csrf_token=' + encodeURIComponent(csrf_token);
+        } else {
+            opts.data = $.extend(opts.data || {}, {csrf_token: csrf_token});
+        }
+    });
 
     // Debug logging function - respects plugin debug setting
     function debugLog() {

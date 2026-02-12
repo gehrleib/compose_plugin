@@ -5,7 +5,6 @@
  */
 
 $plugin_root = "/usr/local/emhttp/plugins/compose.manager";
-$compose_root = "/boot/config/plugins/compose.manager/projects";
 
 require_once("$plugin_root/php/defines.php");
 require_once("$plugin_root/php/util.php");

@@ -6,10 +6,20 @@ require_once("/usr/local/emhttp/plugins/compose.manager/php/exec_functions.php")
 
 // CSRF token validation — Unraid stores a token in var.ini that must
 // accompany every state-changing POST request.
-$_var = @parse_ini_file('/var/local/emhttp/var.ini');
-if ($_var && isset($_var['csrf_token'])) {
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_var['csrf_token']) {
-        die(json_encode(['result' => 'error', 'message' => 'Invalid or missing CSRF token']));
+// Read-only actions are exempted so that GET-like fetches continue to work
+// even when $.ajaxSetup fails to merge the token.
+$_read_only_actions = [
+    'getDescription', 'getYml', 'getEnv', 'getOverride', 'getEnvPath',
+    'getStackSettings', 'getStackContainers', 'getSavedUpdateStatus', 'getLogs',
+    'checkStackLock', 'getStackResult', 'getPendingRecheckStacks',
+    'listBackups', 'readManifest',
+];
+if (!in_array($_POST['action'] ?? '', $_read_only_actions)) {
+    $_var = @parse_ini_file('/var/local/emhttp/var.ini');
+    if ($_var && isset($_var['csrf_token'])) {
+        if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_var['csrf_token']) {
+            die(json_encode(['result' => 'error', 'message' => 'Invalid or missing CSRF token']));
+        }
     }
 }
 
@@ -20,9 +30,11 @@ if ($_var && isset($_var['csrf_token'])) {
  *
  * @return string The sanitized script/stack directory name
  */
-function getPostScript(): string {
-    $script = $_POST['script'] ?? '';
-    return basename(trim($script));
+if (!function_exists('getPostScript')) {
+    function getPostScript(): string {
+        $script = $_POST['script'] ?? '';
+        return basename(trim($script));
+    }
 }
 
 switch ($_POST['action']) {
@@ -437,34 +449,13 @@ switch ($_POST['action']) {
             break;
         }
 
-        // Get the project name (sanitized)
-        $projectName = $script;
-        if (is_file("$compose_root/$script/name")) {
-            $projectName = trim(file_get_contents("$compose_root/$script/name"));
-        }
-        $projectName = sanitizeStr($projectName);
-
-        // Get containers for this compose project using docker compose ps
-        $basePath = getPath("$compose_root/$script");
-        $composeFile = "$basePath/docker-compose.yml";
-        $overrideFile = "$compose_root/$script/docker-compose.override.yml";
-
-        $files = "-f " . escapeshellarg($composeFile);
-        if (is_file($overrideFile)) {
-            $files .= " -f " . escapeshellarg($overrideFile);
-        }
-
-        $envFile = "";
-        if (is_file("$compose_root/$script/envpath")) {
-            $envPath = trim(file_get_contents("$compose_root/$script/envpath"));
-            if (is_file($envPath)) {
-                $envFile = "--env-file " . escapeshellarg($envPath);
-            }
-        }
+        // Build compose CLI arguments (project name, file flags, env-file flag)
+        $args = buildComposeArgs($script);
+        $projectName = $args['projectName'];
 
         // Get container details in JSON format
         // Include --all so exited/stopped containers are returned as well
-        $cmd = "docker compose $files $envFile -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
+        $cmd = "docker compose {$args['files']} {$args['envFile']} -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
         $output = shell_exec($cmd);
 
         // Cache network drivers for resolving network types (bridge vs macvlan/ipvlan)
@@ -689,34 +680,13 @@ switch ($_POST['action']) {
         // Include Docker manager classes for update checking
         require_once("/usr/local/emhttp/plugins/dynamix.docker.manager/include/DockerClient.php");
 
-        // Get the project name (sanitized)
-        $projectName = $script;
-        if (is_file("$compose_root/$script/name")) {
-            $projectName = trim(file_get_contents("$compose_root/$script/name"));
-        }
-        $projectName = sanitizeStr($projectName);
-
-        // Get containers for this compose project
-        $basePath = getPath("$compose_root/$script");
-        $composeFile = "$basePath/docker-compose.yml";
-        $overrideFile = "$compose_root/$script/docker-compose.override.yml";
-
-        $files = "-f " . escapeshellarg($composeFile);
-        if (is_file($overrideFile)) {
-            $files .= " -f " . escapeshellarg($overrideFile);
-        }
-
-        $envFile = "";
-        if (is_file("$compose_root/$script/envpath")) {
-            $envPath = trim(file_get_contents("$compose_root/$script/envpath"));
-            if (is_file($envPath)) {
-                $envFile = "--env-file " . escapeshellarg($envPath);
-            }
-        }
+        // Build compose CLI arguments (project name, file flags, env-file flag)
+        $args = buildComposeArgs($script);
+        $projectName = $args['projectName'];
 
         // Get container images
         // Include --all to ensure non-running containers are considered for update checks
-        $cmd = "docker compose $files $envFile -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
+        $cmd = "docker compose {$args['files']} {$args['envFile']} -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
         $output = shell_exec($cmd);
 
         $updateResults = [];
@@ -860,22 +830,12 @@ switch ($_POST['action']) {
                 }
             }
 
-            // Get project name
-            $projectName = $stackName;
-            if (is_file("$compose_root/$stackName/name")) {
-                $projectName = trim(file_get_contents("$compose_root/$stackName/name"));
-            }
-            $projectName = sanitizeStr($projectName);
-
-            // Get containers
-            $files = "-f " . escapeshellarg($composeFile);
-            $overrideFile = "$compose_root/$stackName/docker-compose.override.yml";
-            if (is_file($overrideFile)) {
-                $files .= " -f " . escapeshellarg($overrideFile);
-            }
+            // Build compose CLI arguments (includes env-file, override, etc.)
+            $args = buildComposeArgs($stackName);
+            $projectName = $args['projectName'];
 
             // Include --all so we can detect stacks that have stopped containers
-            $cmd = "docker compose $files -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
+            $cmd = "docker compose {$args['files']} {$args['envFile']} -p " . escapeshellarg($projectName) . " ps --all --format json 2>/dev/null";
             $output = shell_exec($cmd);
 
             $stackUpdates = [];

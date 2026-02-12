@@ -206,6 +206,7 @@ do
       ;;
     *)
       echo "Unexpected option: $1"
+      shift
       ;;
   esac
 done
